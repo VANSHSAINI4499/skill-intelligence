@@ -15,7 +15,7 @@ from models.student_model import GitHubStats
 def _build_headers() -> dict:
     headers = {"Accept": "application/vnd.github+json"}
     if settings.GITHUB_TOKEN:
-        headers["Authorization"] = f"Bearer {settings.GITHUB_TOKEN}"
+        headers["Authorization"] = f"token {settings.GITHUB_TOKEN}"
         print("[GitHub] Auth header: Bearer token present")
     else:
         print("[GitHub] ⚠ No GITHUB_TOKEN set — using unauthenticated (60 req/hr limit)")
