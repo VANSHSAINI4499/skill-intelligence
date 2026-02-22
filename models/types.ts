@@ -11,6 +11,7 @@ export interface UserProfile {
   score?: number;
   githubRepoCount?: number;
   leetcodeHardCount?: number;
+  updatedAt?: any;
   createdAt: any; // Timestamp
 }
 
@@ -23,4 +24,34 @@ export interface StudentAnalytics {
   languageDistribution: {
     [key: string]: number;
   };
+}
+
+// ── FastAPI backend types ────────────────────────────────────────────────────
+
+export interface AnalyzeStudentPayload {
+  userId: string;
+  githubUsername: string;
+  leetcodeUsername: string;
+  cgpa: number;
+  semester: number;
+}
+
+export interface AnalyticsData {
+  github_totalRepos: number;
+  github_totalStars: number;
+  leetcode_easy: number;
+  leetcode_medium: number;
+  leetcode_hard: number;
+}
+
+export interface AnalyzeStudentResponse {
+  grade: string;
+  score: number;
+  analytics: AnalyticsData;
+}
+
+export interface FilterStudentsParams {
+  grade?: string;
+  minRepos?: number;
+  minHard?: number;
 }

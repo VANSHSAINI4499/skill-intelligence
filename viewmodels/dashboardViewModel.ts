@@ -47,30 +47,31 @@ export function useDashboardViewModel() {
   const updateProfile = async () => {
     if (!userProfile) return;
     setAnalyzing(true);
+    setError(null);
     try {
-      const updatedData: Partial<UserProfile> = {
+      const cgpaNum    = parseFloat(cgpa) || 0;
+      const semesterNum = parseInt(semester) || 1;
+
+      // 1. Persist form fields to Firestore immediately
+      await firebaseService.updateUserProfile(userProfile.uid, {
         githubUsername,
         leetcodeUsername,
-        cgpa: parseFloat(cgpa) || 0,
-        semester: parseInt(semester) || 1,
-      };
+        cgpa: cgpaNum,
+        semester: semesterNum,
+      });
 
-      // 1. Save local changes
-      await firebaseService.updateUserProfile(userProfile.uid, updatedData);
-      
-      // 2. Call Analysis API
-      const analysisResult = await apiService.analyzeStudent({ ...userProfile, ...updatedData });
-      
-      // 3. Save Analysis results
-      const finalData = {
-        ...updatedData,
-        ...analysisResult
-      };
-      
-      await firebaseService.updateUserProfile(userProfile.uid, finalData);
-      
-      // 4. Update local state
-      setUserProfile({ ...userProfile, ...finalData });
+      // 2. Hit FastAPI — backend writes grade/score/analytics back to Firestore
+      await apiService.analyzeStudent({
+        userId: userProfile.uid,
+        githubUsername,
+        leetcodeUsername,
+        cgpa: cgpaNum,
+        semester: semesterNum,
+      });
+
+      // 3. Re-fetch the enriched profile (grade + score now set by backend)
+      const fresh = await firebaseService.getUserProfile(userProfile.uid);
+      if (fresh) setUserProfile(fresh);
 
     } catch (err: any) {
       setError(err.message || "Failed to update profile");

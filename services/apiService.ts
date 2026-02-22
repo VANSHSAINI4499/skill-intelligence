@@ -1,29 +1,47 @@
-import { UserProfile } from "@/models/types";
+import {
+  AnalyzeStudentPayload,
+  AnalyzeStudentResponse,
+  FilterStudentsParams,
+  UserProfile,
+} from "@/models/types";
 
-// Mock implementation since there is no actual backend URL provided in the prompt.
-// This service would normally call an endpoint like /analyze-student
-export const apiService = {
-  async analyzeStudent(profile: UserProfile): Promise<{ score: number; grade: string; githubRepoCount: number; leetcodeHardCount: number }> {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
+const BASE_URL =
+  process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:5000/api";
 
-    // Mock logic for "Analysis"
-    const githubRepoCount = Math.floor(Math.random() * 50);
-    const leetcodeHardCount = Math.floor(Math.random() * 20);
-    
-    let score = (profile.cgpa || 0) * 10 + githubRepoCount + (leetcodeHardCount * 2);
-    if (score > 100) score = 100;
-
-    let grade = 'C';
-    if (score >= 90) grade = 'A';
-    else if (score >= 75) grade = 'B';
-    
-    // In a real app, this would return detailed analysis data
-    return {
-      score,
-      grade,
-      githubRepoCount,
-      leetcodeHardCount
-    };
+export class ApiError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
   }
+}
+
+async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    headers: { "Content-Type": "application/json" },
+    ...init,
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => res.statusText);
+    throw new ApiError(res.status, detail);
+  }
+  return res.json() as Promise<T>;
+}
+
+export const apiService = {
+  /** POST /api/analyze-student — runs the full ranking pipeline */
+  async analyzeStudent(payload: AnalyzeStudentPayload): Promise<AnalyzeStudentResponse> {
+    return apiFetch<AnalyzeStudentResponse>("/analyze-student", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /** GET /api/filter-students — admin student table */
+  async filterStudents(params: FilterStudentsParams): Promise<UserProfile[]> {
+    const qs = new URLSearchParams();
+    if (params.grade && params.grade !== "All") qs.set("grade", params.grade);
+    if (params.minRepos) qs.set("minRepos", String(params.minRepos));
+    if (params.minHard)  qs.set("minHard",  String(params.minHard));
+    return apiFetch<UserProfile[]>(`/filter-students?${qs.toString()}`);
+  },
 };

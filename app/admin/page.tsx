@@ -27,9 +27,11 @@ export default function AdminPage() {
   const {
     students,
     loading,
+    error,
     filterGrade, setFilterGrade,
     minRepos, setMinRepos,
     minHard, setMinHard,
+    applyFilters,
     handleLogout
   } = useAdminViewModel();
 
@@ -55,7 +57,12 @@ export default function AdminPage() {
     <DashboardLayout userRole="admin" userName="Administrator" onLogout={handleLogout}>
       <div className="space-y-6">
         
-        {/* Filters */}
+        {/* Error banner */}
+        {error && (
+          <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}}
         <Card className="shadow-sm">
           <CardHeader>
             <CardTitle>Filter Students</CardTitle>
@@ -97,7 +104,7 @@ export default function AdminPage() {
                 />
               </div>
 
-              <Button className="w-full bg-blue-600 hover:bg-blue-700">
+              <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={applyFilters}>
                 <Search className="mr-2 h-4 w-4" /> Search
               </Button>
             </div>
@@ -118,6 +125,7 @@ export default function AdminPage() {
                         <TableHead>Student Name</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead>Grade</TableHead>
+                        <TableHead className="text-right">Score</TableHead>
                         <TableHead className="text-right">GitHub Repos</TableHead>
                         <TableHead className="text-right">LeetCode Hard</TableHead>
                         <TableHead className="text-right">Semester</TableHead>
@@ -126,7 +134,7 @@ export default function AdminPage() {
                     <TableBody>
                         {students.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={6} className="h-24 text-center">
+                                <TableCell colSpan={7} className="h-24 text-center">
                                     No results found.
                                 </TableCell>
                             </TableRow>
@@ -140,6 +148,7 @@ export default function AdminPage() {
                                     {student.grade || 'N/A'}
                                 </Badge>
                                 </TableCell>
+                                <TableCell className="text-right">{student.score?.toFixed(1) ?? '-'}</TableCell>
                                 <TableCell className="text-right">{student.githubRepoCount || 0}</TableCell>
                                 <TableCell className="text-right">{student.leetcodeHardCount || 0}</TableCell>
                                 <TableCell className="text-right">{student.semester || '-'}</TableCell>

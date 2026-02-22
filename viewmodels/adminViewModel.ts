@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { firebaseService } from '@/services/firebaseService';
+import { apiService } from '@/services/apiService';
 import { UserProfile } from '@/models/types';
 import { auth } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
@@ -8,6 +9,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 export function useAdminViewModel() {
   const [students, setStudents] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filterGrade, setFilterGrade] = useState<string>('All');
   const [minRepos, setMinRepos] = useState<number>(0);
   const [minHard, setMinHard] = useState<number>(0);
@@ -31,22 +33,19 @@ export function useAdminViewModel() {
 
   const fetchStudents = async () => {
     setLoading(true);
+    setError(null);
     try {
-      const data = await firebaseService.getAllStudents();
+      const data = await apiService.filterStudents({ grade: filterGrade, minRepos, minHard });
       setStudents(data);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      setError(err.message || 'Failed to load students');
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredStudents = students.filter(student => {
-    const matchesGrade = filterGrade === 'All' || student.grade === filterGrade;
-    const matchesRepos = (student.githubRepoCount || 0) >= minRepos;
-    const matchesHard = (student.leetcodeHardCount || 0) >= minHard;
-    return matchesGrade && matchesRepos && matchesHard;
-  });
+  const applyFilters = () => fetchStudents();
 
   const handleLogout = async () => {
     await firebaseService.logout();
@@ -54,11 +53,13 @@ export function useAdminViewModel() {
   };
 
   return {
-    students: filteredStudents,
+    students,
     loading,
+    error,
     filterGrade, setFilterGrade,
     minRepos, setMinRepos,
     minHard, setMinHard,
-    handleLogout
+    applyFilters,
+    handleLogout,
   };
 }
