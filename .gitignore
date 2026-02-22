@@ -1,8 +1,8 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
+﻿# ──────────────────────────────────────────────
 # Dependencies
-/node_modules
-/.pnp
+# ──────────────────────────────────────────────
+node_modules/
+.pnp
 .pnp.*
 .yarn/*
 !.yarn/patches
@@ -10,43 +10,97 @@
 !.yarn/releases
 !.yarn/versions
 
-# Testing
-/coverage
-
-# Next.js build outputs
-/.next/
+# ──────────────────────────────────────────────
+# Frontend — Next.js build output & cache
+# ──────────────────────────────────────────────
+.next/
 .nextbuild/
-/out/
+frontend/.next/
+frontend/.nextbuild/
+frontend/out/
+out/
 
-# Production build
-/build
-/dist
-
+# ──────────────────────────────────────────────
 # Turbopack / Turborepo
+# ──────────────────────────────────────────────
 .turbo/
+frontend/.turbo/
 
-# Misc
-.DS_Store
-Thumbs.db
-*.pem
+# ──────────────────────────────────────────────
+# Backend — build output
+# ──────────────────────────────────────────────
+backend/dist/
+backend/build/
+dist/
+build/
 
-# Debug logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-*.log
+# ──────────────────────────────────────────────
+# Python (backend)
+# ──────────────────────────────────────────────
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.venv/
+venv/
+env/
+backend/.venv/
+backend/__pycache__/
 
-# Environment variables (Firebase keys & secrets — never commit these)
+# ──────────────────────────────────────────────
+# Firebase Admin SDK private key — NEVER commit
+# ──────────────────────────────────────────────
+serviceAccountKey.json
+backend/serviceAccountKey.json
+
+# ──────────────────────────────────────────────
+# Environment variables — NEVER commit these
+# ──────────────────────────────────────────────
 .env
 .env.local
 .env.*.local
 .env.development
 .env.production
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+backend/.env
+backend/.env.local
+backend/.env.*.local
 
+# ──────────────────────────────────────────────
+# Logs
+# ──────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ──────────────────────────────────────────────
+# OS / Editor
+# ──────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.pem
+.vscode/settings.json
+
+# ──────────────────────────────────────────────
+# Testing / Coverage
+# ──────────────────────────────────────────────
+coverage/
+.nyc_output/
+
+# ──────────────────────────────────────────────
 # Vercel
+# ──────────────────────────────────────────────
 .vercel
 
+# ──────────────────────────────────────────────
 # TypeScript
+# ──────────────────────────────────────────────
 *.tsbuildinfo
 next-env.d.ts
