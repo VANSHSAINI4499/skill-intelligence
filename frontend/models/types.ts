@@ -10,9 +10,17 @@ export interface UserProfile {
   grade?: string;
   score?: number;
   githubRepoCount?: number;
+  githubStarCount?: number;
+  leetcodeEasyCount?: number;
+  leetcodeMediumCount?: number;
   leetcodeHardCount?: number;
   updatedAt?: any;
   createdAt: any; // Timestamp
+}
+
+// Merged dashboard view — profile + live analytics
+export interface DashboardData extends UserProfile {
+  analytics?: AnalyticsData;
 }
 
 export interface StudentAnalytics {

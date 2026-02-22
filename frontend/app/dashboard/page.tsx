@@ -2,37 +2,99 @@
 
 import { useDashboardViewModel } from "@/viewmodels/dashboardViewModel";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { GradeBadge } from "@/components/dashboard/GradeBadge";
+import { ScoreCircle } from "@/components/dashboard/ScoreCircle";
+import { GithubPulseCard } from "@/components/dashboard/GithubPulseCard";
+import { LeetcodeMasteryCard } from "@/components/dashboard/LeetcodeMasteryCard";
+import { SkillRadar } from "@/components/dashboard/SkillRadar";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Loader2, Github, Code2, Award, BookOpen } from "lucide-react";
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-  ArcElement
-} from 'chart.js';
-import { Bar, Pie } from 'react-chartjs-2';
+import { motion } from "framer-motion";
+import { Loader2, Github, Code2, Cpu, SlidersHorizontal } from "lucide-react";
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-  ArcElement
-);
+// ----- Animation Variants -----
+const fadeUp = {
+  hidden: { opacity: 0, y: 24 },
+  show:   { opacity: 1, y: 0 },
+};
 
+const stagger = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.12 } },
+};
+
+// ----- Reusable dark card wrapper -----
+function DarkCard({
+  children,
+  className = "",
+  glowColor = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+  glowColor?: string;
+}) {
+  return (
+    <motion.div
+      variants={fadeUp}
+      whileHover={{ scale: 1.015, transition: { duration: 0.2 } }}
+      className={`
+        relative rounded-2xl bg-[#111827] border border-slate-800/70
+        shadow-xl backdrop-blur-sm overflow-hidden
+        ${glowColor}
+        ${className}
+      `}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+function SectionHeader({
+  icon,
+  title,
+  subtitle,
+  iconColor = "text-cyan-400",
+  iconBg = "bg-cyan-500/10",
+}: {
+  icon: React.ReactNode;
+  title: string;
+  subtitle?: string;
+  iconColor?: string;
+  iconBg?: string;
+}) {
+  return (
+    <div className="flex items-start gap-3 mb-5">
+      <div className={`p-2.5 rounded-xl ${iconBg}`}>
+        <span className={iconColor}>{icon}</span>
+      </div>
+      <div>
+        <h3 className="font-bold text-white text-sm">{title}</h3>
+        {subtitle && <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>}
+      </div>
+    </div>
+  );
+}
+
+// ----- Loading skeleton -----
+function DashboardSkeleton() {
+  return (
+    <div className="min-h-screen bg-[#0B1120] flex items-center justify-center">
+      <div className="space-y-4 w-full max-w-md p-8">
+        <Skeleton className="h-16 w-16 rounded-full bg-slate-800" />
+        <Skeleton className="h-4 w-56 bg-slate-800" />
+        <Skeleton className="h-4 w-40 bg-slate-800" />
+        <Skeleton className="h-4 w-48 bg-slate-800" />
+      </div>
+    </div>
+  );
+}
+
+// =================== PAGE ===================
 export default function DashboardPage() {
   const {
     userProfile,
+    analytics,
     loading,
     analyzing,
     githubUsername, setGithubUsername,
@@ -40,169 +102,210 @@ export default function DashboardPage() {
     cgpa, setCgpa,
     semester, setSemester,
     updateProfile,
-    handleLogout
+    handleLogout,
   } = useDashboardViewModel();
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]">
-        <div className="space-y-4 w-full max-w-md p-8">
-          <Skeleton className="h-12 w-12 rounded-full" />
-          <Skeleton className="h-4 w-[250px]" />
-          <Skeleton className="h-4 w-[200px]" />
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <DashboardSkeleton />;
 
-  // --- Chart Data Configuration ---
-  const barData = {
-    labels: ['Easy', 'Medium', 'Hard'],
-    datasets: [
-      {
-        label: 'LeetCode Problems',
-        data: [
-          15, // Mock data for demo since not in model
-          30, // Mock data
-          userProfile?.leetcodeHardCount || 0
-        ],
-        backgroundColor: ['rgba(75, 192, 192, 0.6)', 'rgba(255, 205, 86, 0.6)', 'rgba(255, 99, 132, 0.6)'],
-      },
-    ],
-  };
-
-  const pieData = {
-    labels: ['JavaScript', 'Python', 'Java', 'C++'],
-    datasets: [
-      {
-        data: [45, 25, 20, 10], // Mock distribution
-        backgroundColor: [
-          'rgba(54, 162, 235, 0.7)',
-          'rgba(75, 192, 192, 0.7)',
-          'rgba(255, 159, 64, 0.7)',
-          'rgba(153, 102, 255, 0.7)',
-        ],
-        borderWidth: 1,
-      },
-    ],
-  };
-  
-  // --- Badge Color Logic ---
-  const getGradeColor = (grade?: string) => {
-    switch(grade) {
-      case 'A': return 'bg-green-100 text-green-700 hover:bg-green-200';
-      case 'B': return 'bg-blue-100 text-blue-700 hover:bg-blue-200';
-      case 'C': return 'bg-amber-100 text-amber-700 hover:bg-amber-200';
-      case 'D': return 'bg-red-100 text-red-700 hover:bg-red-200';
-      default: return 'bg-slate-100 text-slate-700 hover:bg-slate-200';
-    }
-  };
+  const totalLeet =
+    (analytics?.leetcode_easy ?? 0) +
+    (analytics?.leetcode_medium ?? 0) +
+    (analytics?.leetcode_hard ?? 0);
 
   return (
-    <DashboardLayout 
-      userRole={userProfile?.role} 
-      userName={userProfile?.name} 
+    <DashboardLayout
+      userRole={userProfile?.role}
+      userName={userProfile?.name}
       onLogout={handleLogout}
     >
-      <div className="grid gap-6">
-        
-        {/* Top Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <Card className="border-l-4 border-l-blue-500">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium text-slate-500">Current Grade</CardTitle>
-              <Award className="h-4 w-4 text-slate-500" />
-            </CardHeader>
-            <CardContent>
-              <div className={`text-2xl font-bold px-3 py-1 rounded inline-block ${getGradeColor(userProfile?.grade)}`}>
-                {userProfile?.grade || 'N/A'}
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium text-slate-500">Overall Score</CardTitle>
-              <div className="text-slate-500 font-bold">%</div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{userProfile?.score || 0}</div>
-              <p className="text-xs text-slate-500">Based on CGPA & Skills</p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium text-slate-500">GitHub Repos</CardTitle>
-              <Github className="h-4 w-4 text-slate-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{userProfile?.githubRepoCount || 0}</div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium text-slate-500">LeetCode Hard</CardTitle>
-              <Code2 className="h-4 w-4 text-slate-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{userProfile?.leetcodeHardCount || 0}</div>
-            </CardContent>
-          </Card>
+      <motion.div
+        variants={stagger}
+        initial="hidden"
+        animate="show"
+        className="space-y-6"
+      >
+
+        {/* SECTION 1 — HERO */}
+        <DarkCard glowColor="shadow-[0_0_60px_rgba(6,182,212,0.07)]" className="p-6">
+          <div className="absolute top-0 left-0 right-0 h-0.5 bg-linear-to-r from-cyan-500 via-blue-500 to-violet-500 rounded-t-2xl" />
+          <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
+            <div className="flex flex-col md:flex-row items-center gap-10">
+              <GradeBadge grade={userProfile?.grade} />
+              <ScoreCircle score={userProfile?.score ?? 0} />
+            </div>
+            <div className="flex flex-col justify-center flex-1 text-center md:text-left">
+              <motion.h2
+                variants={fadeUp}
+                className="text-2xl md:text-3xl font-extrabold text-white leading-tight"
+              >
+                {userProfile?.name?.split(" ")[0]}&apos;s{" "}
+                <span className="bg-linear-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
+                  Skill Profile
+                </span>
+              </motion.h2>
+              <motion.p variants={fadeUp} className="text-slate-400 text-sm mt-2 max-w-lg">
+                Your performance places you in the{" "}
+                <span className="text-cyan-400 font-semibold">top tier</span> of active coders.
+                Keep solving, keep building.
+              </motion.p>
+              <motion.div variants={fadeUp} className="flex flex-wrap gap-3 mt-5 justify-center md:justify-start">
+                <span className="bg-slate-800/80 border border-slate-700/50 rounded-full px-4 py-1.5 text-xs text-slate-300 font-medium">
+                  ?? Sem {userProfile?.semester ?? "—"}
+                </span>
+                <span className="bg-slate-800/80 border border-slate-700/50 rounded-full px-4 py-1.5 text-xs text-slate-300 font-medium">
+                  ?? CGPA {userProfile?.cgpa ?? "—"}
+                </span>
+                <span className="bg-slate-800/80 border border-slate-700/50 rounded-full px-4 py-1.5 text-xs text-slate-300 font-medium">
+                  ?? {totalLeet} LeetCode Solved
+                </span>
+                <span className="bg-slate-800/80 border border-slate-700/50 rounded-full px-4 py-1.5 text-xs text-slate-300 font-medium">
+                  ?? {analytics?.github_totalRepos ?? userProfile?.githubRepoCount ?? 0} GitHub Repos
+                </span>
+              </motion.div>
+            </div>
+          </div>
+        </DarkCard>
+
+        {/* SECTION 2 + 3 — GITHUB + LEETCODE */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <DarkCard glowColor="shadow-[0_0_40px_rgba(34,211,238,0.06)]" className="p-6">
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-linear-to-r from-cyan-500 to-blue-500 rounded-t-2xl" />
+            <SectionHeader
+              icon={<Github size={16} />}
+              title="GitHub Pulse"
+              subtitle="Repository activity & language distribution"
+              iconColor="text-cyan-400"
+              iconBg="bg-cyan-500/10"
+            />
+            <GithubPulseCard
+              totalRepos={analytics?.github_totalRepos ?? userProfile?.githubRepoCount ?? 0}
+              totalStars={analytics?.github_totalStars ?? 0}
+            />
+          </DarkCard>
+
+          <DarkCard glowColor="shadow-[0_0_40px_rgba(251,146,60,0.06)]" className="p-6">
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-linear-to-r from-orange-500 to-yellow-400 rounded-t-2xl" />
+            <SectionHeader
+              icon={<Code2 size={16} />}
+              title="LeetCode Mastery"
+              subtitle="Difficulty breakdown & performance insights"
+              iconColor="text-orange-400"
+              iconBg="bg-orange-500/10"
+            />
+            <LeetcodeMasteryCard
+              easy={analytics?.leetcode_easy ?? 0}
+              medium={analytics?.leetcode_medium ?? 0}
+              hard={analytics?.leetcode_hard ?? userProfile?.leetcodeHardCount ?? 0}
+            />
+          </DarkCard>
         </div>
 
+        {/* SECTION 4 + FORM */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
-          {/* Profile Form */}
-          <Card className="lg:col-span-1 shadow-sm">
-            <CardHeader>
-              <CardTitle>Profile Details</CardTitle>
-              <CardDescription>Update your academic and coding profiles to recalculate your score.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Semester</label>
-                <Input value={semester} onChange={(e) => setSemester(e.target.value)} type="number" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">CGPA</label>
-                <Input value={cgpa} onChange={(e) => setCgpa(e.target.value)} type="number" step="0.01" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">GitHub Username</label>
-                <Input value={githubUsername} onChange={(e) => setGithubUsername(e.target.value)} placeholder="username" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">LeetCode Username</label>
-                <Input value={leetcodeUsername} onChange={(e) => setLeetcodeUsername(e.target.value)} placeholder="username" />
-              </div>
-              
-              <Button onClick={updateProfile} className="w-full bg-slate-900 hover:bg-slate-800" disabled={analyzing}>
-                {analyzing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {analyzing ? 'Analyzing...' : 'Update & Analyze'}
-              </Button>
-            </CardContent>
-          </Card>
+          <DarkCard glowColor="shadow-[0_0_40px_rgba(124,58,237,0.07)]" className="p-6 lg:col-span-1">
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-linear-to-r from-violet-500 to-indigo-500 rounded-t-2xl" />
+            <SectionHeader
+              icon={<Cpu size={16} />}
+              title="Skill Insights"
+              subtitle="AI-powered balance index"
+              iconColor="text-violet-400"
+              iconBg="bg-violet-500/10"
+            />
+            <SkillRadar
+              easy={analytics?.leetcode_easy ?? 0}
+              medium={analytics?.leetcode_medium ?? 0}
+              hard={analytics?.leetcode_hard ?? userProfile?.leetcodeHardCount ?? 0}
+              repos={analytics?.github_totalRepos ?? userProfile?.githubRepoCount ?? 0}
+              cgpa={userProfile?.cgpa ?? 0}
+            />
+          </DarkCard>
 
-          {/* Charts */}
-          <Card className="lg:col-span-2 shadow-sm">
-            <CardHeader>
-              <CardTitle>Performance Analytics</CardTitle>
-              <CardDescription>Skill distribution across platforms.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid md:grid-cols-2 gap-8">
-              <div className="h-[250px] flex items-center justify-center">
-                 <Bar data={barData} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }} />
+          <DarkCard className="p-6 lg:col-span-2">
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-linear-to-r from-slate-600 to-slate-700 rounded-t-2xl" />
+            <SectionHeader
+              icon={<SlidersHorizontal size={16} />}
+              title="Update Profile"
+              subtitle="Recalculate your score with new data"
+              iconColor="text-slate-300"
+              iconBg="bg-slate-700/60"
+            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Semester</label>
+                <Input
+                  value={semester}
+                  onChange={(e) => setSemester(e.target.value)}
+                  type="number"
+                  className="bg-[#0B1120] border-slate-700 text-slate-100 placeholder:text-slate-600 rounded-xl"
+                  placeholder="e.g. 3"
+                />
               </div>
-              <div className="h-[250px] flex items-center justify-center">
-                 <Pie data={pieData} options={{ responsive: true, maintainAspectRatio: false }} />
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">CGPA</label>
+                <Input
+                  value={cgpa}
+                  onChange={(e) => setCgpa(e.target.value)}
+                  type="number"
+                  step="0.01"
+                  className="bg-[#0B1120] border-slate-700 text-slate-100 placeholder:text-slate-600 rounded-xl"
+                  placeholder="e.g. 8.5"
+                />
               </div>
-            </CardContent>
-          </Card>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">GitHub Username</label>
+                <Input
+                  value={githubUsername}
+                  onChange={(e) => setGithubUsername(e.target.value)}
+                  className="bg-[#0B1120] border-slate-700 text-slate-100 placeholder:text-slate-600 rounded-xl"
+                  placeholder="username"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">LeetCode Username</label>
+                <Input
+                  value={leetcodeUsername}
+                  onChange={(e) => setLeetcodeUsername(e.target.value)}
+                  className="bg-[#0B1120] border-slate-700 text-slate-100 placeholder:text-slate-600 rounded-xl"
+                  placeholder="username"
+                />
+              </div>
+            </div>
 
+            <Button
+              onClick={updateProfile}
+              disabled={analyzing}
+              className="w-full mt-5 bg-linear-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold rounded-xl h-11 shadow-lg shadow-cyan-500/20 transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {analyzing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Analyzing Your Profile...
+                </>
+              ) : (
+                "? Analyze & Update Score"
+              )}
+            </Button>
+
+            {analyzing && (
+              <div className="mt-3 flex gap-2 flex-wrap">
+                {["Fetching GitHub", "Fetching LeetCode", "Calculating Score", "Updating Firestore"].map((step, i) => (
+                  <motion.span
+                    key={step}
+                    initial={{ opacity: 0, scale: 0.85 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: i * 0.3 }}
+                    className="text-xs bg-slate-800 border border-slate-700 rounded-full px-3 py-1 text-slate-400"
+                  >
+                    <Loader2 className="inline mr-1 h-2.5 w-2.5 animate-spin" />
+                    {step}
+                  </motion.span>
+                ))}
+              </div>
+            )}
+          </DarkCard>
         </div>
-      </div>
+
+      </motion.div>
     </DashboardLayout>
   );
 }

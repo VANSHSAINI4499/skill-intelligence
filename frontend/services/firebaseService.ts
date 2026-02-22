@@ -73,5 +73,14 @@ export const firebaseService = {
       students.push({ uid: doc.id, ...doc.data() } as UserProfile);
     });
     return students;
+  },
+
+  async getUserAnalytics(uid: string): Promise<import('@/models/types').AnalyticsData | null> {
+    const docRef = doc(db, "analytics", uid);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return docSnap.data() as import('@/models/types').AnalyticsData;
+    }
+    return null;
   }
 };

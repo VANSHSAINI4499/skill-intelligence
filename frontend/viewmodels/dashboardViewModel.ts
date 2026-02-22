@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { firebaseService } from '@/services/firebaseService';
 import { apiService } from '@/services/apiService';
-import { UserProfile } from '@/models/types';
+import { UserProfile, AnalyticsData } from '@/models/types';
 import { auth } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged } from 'firebase/auth';
 
 export function useDashboardViewModel() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,18 +20,26 @@ export function useDashboardViewModel() {
   const [cgpa, setCgpa] = useState<string>('');
   const [semester, setSemester] = useState<string>('');
 
+  const loadUserData = async (uid: string) => {
+    const [profile, analyticsData] = await Promise.all([
+      firebaseService.getUserProfile(uid),
+      firebaseService.getUserAnalytics(uid),
+    ]);
+    if (profile) {
+      setUserProfile(profile);
+      setGithubUsername(profile.githubUsername || '');
+      setLeetcodeUsername(profile.leetcodeUsername || '');
+      setCgpa(profile.cgpa?.toString() || '');
+      setSemester(profile.semester?.toString() || '');
+    }
+    if (analyticsData) setAnalytics(analyticsData);
+  };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         try {
-          const profile = await firebaseService.getUserProfile(user.uid);
-          if (profile) {
-            setUserProfile(profile);
-            setGithubUsername(profile.githubUsername || '');
-            setLeetcodeUsername(profile.leetcodeUsername || '');
-            setCgpa(profile.cgpa?.toString() || '');
-            setSemester(profile.semester?.toString() || '');
-          }
+          await loadUserData(user.uid);
         } catch (err) {
           console.error("Error fetching profile", err);
           setError("Failed to load profile");
@@ -69,9 +78,13 @@ export function useDashboardViewModel() {
         semester: semesterNum,
       });
 
-      // 3. Re-fetch the enriched profile (grade + score now set by backend)
-      const fresh = await firebaseService.getUserProfile(userProfile.uid);
+      // 3. Re-fetch the enriched profile + analytics (grade + score now set by backend)
+      const [fresh, freshAnalytics] = await Promise.all([
+        firebaseService.getUserProfile(userProfile.uid),
+        firebaseService.getUserAnalytics(userProfile.uid),
+      ]);
       if (fresh) setUserProfile(fresh);
+      if (freshAnalytics) setAnalytics(freshAnalytics);
 
     } catch (err: any) {
       setError(err.message || "Failed to update profile");
@@ -87,6 +100,7 @@ export function useDashboardViewModel() {
 
   return {
     userProfile,
+    analytics,
     loading,
     analyzing,
     error,
