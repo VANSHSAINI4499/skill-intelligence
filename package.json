@@ -3,15 +3,30 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "predev": "node -e \"const {execSync}=require('child_process');const kill=cmd=>{try{execSync(cmd,{stdio:'ignore'})}catch(e){}};try{const r=execSync('wmic process where \\\"name=\\'node.exe\\' and commandline like \\'%next%dev%\\'\\\" get processid /format:value',{encoding:'utf8'});(r.match(/ProcessId=(\\\\d+)/g)||[]).forEach(p=>kill('taskkill /F /PID '+p.replace('ProcessId=','')));}catch(e){};try{const r=execSync('netstat -ano -p TCP',{encoding:'utf8'});const m=r.match(/TCP[\\\\s]+[^\\\\s]+:3001[\\\\s]+[^\\\\s]+[\\\\s]+LISTENING[\\\\s]+(\\\\d+)/);if(m)kill('taskkill /F /PID '+m[1]);}catch(e){};const{spawnSync}=require('child_process');spawnSync('ping',['-n','2','127.0.0.1'],{stdio:'ignore'});const fs=require('fs');try{fs.rmSync('.nextbuild/dev',{recursive:true,force:true})}catch(e){}\"",
+    "dev": "next dev -p 3001",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
+    "@hookform/resolvers": "^5.2.2",
+    "@radix-ui/react-label": "^2.1.8",
+    "@radix-ui/react-select": "^2.2.6",
+    "@radix-ui/react-slot": "^1.2.4",
+    "chart.js": "^4.5.1",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "firebase": "^12.9.0",
+    "lucide-react": "^0.575.0",
     "next": "16.1.6",
+    "radix-ui": "^1.4.3",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-chartjs-2": "^5.3.1",
+    "react-dom": "19.2.3",
+    "react-hook-form": "^7.71.2",
+    "tailwind-merge": "^3.5.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -20,7 +35,9 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "shadcn": "^3.8.5",
     "tailwindcss": "^4",
+    "tw-animate-css": "^1.4.0",
     "typescript": "^5"
   }
 }
