@@ -58,7 +58,7 @@ export function useDashboardViewModel() {
     setAnalyzing(true);
     setError(null);
     try {
-      const cgpaNum    = parseFloat(cgpa) || 0;
+      const cgpaNum     = parseFloat(cgpa) || 0;
       const semesterNum = parseInt(semester) || 1;
 
       // 1. Persist form fields to Firestore immediately
@@ -69,8 +69,9 @@ export function useDashboardViewModel() {
         semester: semesterNum,
       });
 
-      // 2. Hit FastAPI — backend writes grade/score/analytics back to Firestore
-      await apiService.analyzeStudent({
+      // 2. Hit FastAPI — fetches GitHub/LeetCode, scores the student,
+      //    and writes grade + score back to Firestore; response has everything we need
+      const result = await apiService.analyzeStudent({
         userId: userProfile.uid,
         githubUsername,
         leetcodeUsername,
@@ -78,13 +79,24 @@ export function useDashboardViewModel() {
         semester: semesterNum,
       });
 
-      // 3. Re-fetch the enriched profile + analytics (grade + score now set by backend)
-      const [fresh, freshAnalytics] = await Promise.all([
-        firebaseService.getUserProfile(userProfile.uid),
-        firebaseService.getUserAnalytics(userProfile.uid),
-      ]);
-      if (fresh) setUserProfile(fresh);
-      if (freshAnalytics) setAnalytics(freshAnalytics);
+      // 3. Apply the API response directly to state — no Firestore re-fetch required
+      //    (avoids the window where Firestore write hasn't propagated yet)
+      setUserProfile((prev) =>
+        prev
+          ? {
+              ...prev,
+              grade: result.grade,
+              score: result.score,
+              githubUsername,
+              leetcodeUsername,
+              cgpa: cgpaNum,
+              semester: semesterNum,
+              githubRepoCount: result.analytics.github_totalRepos,
+              leetcodeHardCount: result.analytics.leetcode_hard,
+            }
+          : prev
+      );
+      setAnalytics(result.analytics);
 
     } catch (err: any) {
       setError(err.message || "Failed to update profile");

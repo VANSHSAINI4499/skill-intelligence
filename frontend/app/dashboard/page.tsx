@@ -97,6 +97,7 @@ export default function DashboardPage() {
     analytics,
     loading,
     analyzing,
+    error,
     githubUsername, setGithubUsername,
     leetcodeUsername, setLeetcodeUsername,
     cgpa, setCgpa,
@@ -150,16 +151,16 @@ export default function DashboardPage() {
               </motion.p>
               <motion.div variants={fadeUp} className="flex flex-wrap gap-3 mt-5 justify-center md:justify-start">
                 <span className="bg-slate-800/80 border border-slate-700/50 rounded-full px-4 py-1.5 text-xs text-slate-300 font-medium">
-                  ?? Sem {userProfile?.semester ?? "—"}
+                  📚 Sem {userProfile?.semester ?? "—"}
                 </span>
                 <span className="bg-slate-800/80 border border-slate-700/50 rounded-full px-4 py-1.5 text-xs text-slate-300 font-medium">
-                  ?? CGPA {userProfile?.cgpa ?? "—"}
+                  🎓 CGPA {userProfile?.cgpa ?? "—"}
                 </span>
                 <span className="bg-slate-800/80 border border-slate-700/50 rounded-full px-4 py-1.5 text-xs text-slate-300 font-medium">
-                  ?? {totalLeet} LeetCode Solved
+                  💻 {totalLeet} LeetCode Solved
                 </span>
                 <span className="bg-slate-800/80 border border-slate-700/50 rounded-full px-4 py-1.5 text-xs text-slate-300 font-medium">
-                  ?? {analytics?.github_totalRepos ?? userProfile?.githubRepoCount ?? 0} GitHub Repos
+                  🐙 {analytics?.github_totalRepos ?? userProfile?.githubRepoCount ?? 0} GitHub Repos
                 </span>
               </motion.div>
             </div>
@@ -271,6 +272,12 @@ export default function DashboardPage() {
               </div>
             </div>
 
+            {error && (
+              <div className="mb-4 rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-400">
+                ⚠️ {error}
+              </div>
+            )}
+
             <Button
               onClick={updateProfile}
               disabled={analyzing}
@@ -282,7 +289,7 @@ export default function DashboardPage() {
                   Analyzing Your Profile...
                 </>
               ) : (
-                "? Analyze & Update Score"
+                "⚡ Analyze & Update Score"
               )}
             </Button>
 
