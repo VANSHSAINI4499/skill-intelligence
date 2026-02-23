@@ -7,11 +7,12 @@ import { ScoreCircle } from "@/components/dashboard/ScoreCircle";
 import { GithubPulseCard } from "@/components/dashboard/GithubPulseCard";
 import { LeetcodeMasteryCard } from "@/components/dashboard/LeetcodeMasteryCard";
 import { SkillRadar } from "@/components/dashboard/SkillRadar";
+import { TopRepositoriesCard } from "@/components/dashboard/TopRepositoriesCard";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { motion } from "framer-motion";
-import { Loader2, Github, Code2, Cpu, SlidersHorizontal } from "lucide-react";
+import { Loader2, Github, Code2, Cpu, SlidersHorizontal, GitBranch } from "lucide-react";
 
 // ----- Animation Variants -----
 const fadeUp = {
@@ -181,6 +182,7 @@ export default function DashboardPage() {
             <GithubPulseCard
               totalRepos={analytics?.github_totalRepos ?? userProfile?.githubRepoCount ?? 0}
               totalStars={analytics?.github_totalStars ?? 0}
+              languageDistribution={analytics?.github_languageDistribution ?? {}}
             />
           </DarkCard>
 
@@ -201,14 +203,33 @@ export default function DashboardPage() {
           </DarkCard>
         </div>
 
-        {/* SECTION 4 + FORM */}
+        {/* SECTION 4 — TOP REPOSITORIES + SKILL RADAR */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <DarkCard glowColor="shadow-[0_0_40px_rgba(6,182,212,0.07)]" className="p-6 lg:col-span-2">
+            {/* Animated gradient top-border */}
+            <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-2xl overflow-hidden">
+              <motion.div
+                className="h-full w-full bg-gradient-to-r from-cyan-500 via-violet-500 to-orange-500"
+                animate={{ backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"] }}
+                transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
+              />
+            </div>
+            <SectionHeader
+              icon={<GitBranch size={16} />}
+              title="Top Repositories"
+              subtitle="Sorted by stargazers · sourced live from GitHub"
+              iconColor="text-cyan-400"
+              iconBg="bg-cyan-500/10"
+            />
+            <TopRepositoriesCard repositories={analytics?.topRepositories ?? []} />
+          </DarkCard>
+
           <DarkCard glowColor="shadow-[0_0_40px_rgba(124,58,237,0.07)]" className="p-6 lg:col-span-1">
-            <div className="absolute top-0 left-0 right-0 h-0.5 bg-linear-to-r from-violet-500 to-indigo-500 rounded-t-2xl" />
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-violet-500 to-indigo-500 rounded-t-2xl" />
             <SectionHeader
               icon={<Cpu size={16} />}
               title="Skill Insights"
-              subtitle="AI-powered balance index"
+              subtitle="Normalised balance index"
               iconColor="text-violet-400"
               iconBg="bg-violet-500/10"
             />
@@ -220,8 +241,11 @@ export default function DashboardPage() {
               cgpa={userProfile?.cgpa ?? 0}
             />
           </DarkCard>
+        </div>
 
-          <DarkCard className="p-6 lg:col-span-2">
+        {/* SECTION 5 — UPDATE PROFILE */}
+        <div>
+          <DarkCard className="p-6">
             <div className="absolute top-0 left-0 right-0 h-0.5 bg-linear-to-r from-slate-600 to-slate-700 rounded-t-2xl" />
             <SectionHeader
               icon={<SlidersHorizontal size={16} />}

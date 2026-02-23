@@ -12,9 +12,9 @@ Orchestrates the full analysis pipeline:
 """
 
 import traceback
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
+from google.cloud import firestore
 
 from config.firebase import db
 from core.ranking_engine import calculate_grade, calculate_score
@@ -70,33 +70,60 @@ async def analyze_student(payload: AnalyzeStudentRequest) -> AnalyzeStudentRespo
         analytics = AnalyticsData(
             github_totalRepos=github_stats.totalRepos,
             github_totalStars=github_stats.totalStars,
+            github_languageDistribution=github_stats.languageDistribution,
+            topRepositories=github_stats.topRepositories,
             leetcode_easy=leetcode_stats.easy,
             leetcode_medium=leetcode_stats.medium,
             leetcode_hard=leetcode_stats.hard,
         )
         print(f"[Analyze] Analytics: {analytics.model_dump()}")
 
-        now = datetime.now(timezone.utc)
-
         # ── 4. Persist to Firestore ───────────────────────────────────────────
         print(f"[Analyze] ► Step 4 — Writing Firestore users/{payload.userId} ...")
         db.collection("users").document(payload.userId).set(
             {
-                "grade": grade,
-                "score": score,
-                "githubUsername": payload.githubUsername,
-                "leetcodeUsername": payload.leetcodeUsername,
-                "githubRepoCount": github_stats.totalRepos,
+                "grade":             grade,
+                "score":             score,
+                "githubUsername":    payload.githubUsername,
+                "leetcodeUsername":  payload.leetcodeUsername,
+                "cgpa":              payload.cgpa,
+                "semester":          payload.semester,
+                "githubRepoCount":   github_stats.totalRepos,
                 "leetcodeHardCount": leetcode_stats.hard,
-                "updatedAt": now,
+                "updatedAt":         firestore.SERVER_TIMESTAMP,
             },
             merge=True,
         )
         print(f"[Analyze] ✅ users/{payload.userId} updated")
 
+        # Build an explicit, fully-typed analytics document so every field
+        # is visible in logs and no stale key is accidentally omitted.
+        analytics_doc = {
+            "github_totalRepos":           github_stats.totalRepos,
+            "github_totalStars":           github_stats.totalStars,
+            "github_languageDistribution": github_stats.languageDistribution,
+            "topRepositories": [
+                repo.model_dump() for repo in github_stats.topRepositories
+            ],
+            "leetcode_easy":   leetcode_stats.easy,
+            "leetcode_medium": leetcode_stats.medium,
+            "leetcode_hard":   leetcode_stats.hard,
+            "lastUpdated":     firestore.SERVER_TIMESTAMP,
+        }
+
+        print(f"[Analyze] ► Step 5 — analytics_doc to write:")
+        print(f"[Analyze]   github_totalRepos           = {analytics_doc['github_totalRepos']}")
+        print(f"[Analyze]   github_totalStars           = {analytics_doc['github_totalStars']}")
+        print(f"[Analyze]   github_languageDistribution = {analytics_doc['github_languageDistribution']}")
+        print(f"[Analyze]   topRepositories             = {[r['name'] for r in analytics_doc['topRepositories']]}")
+        print(f"[Analyze]   leetcode_easy               = {analytics_doc['leetcode_easy']}")
+        print(f"[Analyze]   leetcode_medium             = {analytics_doc['leetcode_medium']}")
+        print(f"[Analyze]   leetcode_hard               = {analytics_doc['leetcode_hard']}")
+
         print(f"[Analyze] ► Step 5 — Writing Firestore analytics/{payload.userId} ...")
         db.collection("analytics").document(payload.userId).set(
-            {**analytics.model_dump(), "lastUpdated": now}
+            analytics_doc,
+            merge=True,
         )
         print(f"[Analyze] ✅ analytics/{payload.userId} updated")
 

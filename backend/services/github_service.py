@@ -9,7 +9,7 @@ from typing import Optional
 import httpx
 
 from config.settings import settings
-from models.student_model import GitHubStats
+from models.student_model import GitHubStats, TopRepository
 
 
 def _build_headers() -> dict:
@@ -44,18 +44,55 @@ def fetch_github_stats(username: str) -> GitHubStats:
 
         total_repos = 0
         total_stars = 0
+        language_distribution: dict[str, int] = {}
+        owned_repos = []
 
         for repo in repos:
-            is_fork = repo.get("fork", False)  # default False — owned repos rarely omit this
-            name = repo.get("name", "?")
-            stars = repo.get("stargazers_count", 0)
-            print(f"[GitHub]   repo={name!r}  fork={is_fork}  stars={stars}")
+            is_fork = repo.get("fork", False)
+            name     = repo.get("name", "?")
+            stars    = repo.get("stargazers_count", 0)
+            language = repo.get("language")  # may be None
+            print(f"[GitHub]   repo={name!r}  fork={is_fork}  stars={stars}  lang={language!r}")
+
             if not is_fork:
                 total_repos += 1
                 total_stars += stars
 
-        print(f"[GitHub] ✅ Result: totalRepos={total_repos}  totalStars={total_stars}")
-        return GitHubStats(totalRepos=total_repos, totalStars=total_stars)
+                # Accumulate language distribution (skip None)
+                if language:
+                    language_distribution[language] = language_distribution.get(language, 0) + 1
+
+                # Collect for top-5 sort
+                owned_repos.append({
+                    "name":     name,
+                    "stars":    stars,
+                    "html_url": repo.get("html_url", ""),
+                    "language": language,
+                })
+
+        # Sort by stars descending, take top 5
+        top_repos = sorted(owned_repos, key=lambda r: r["stars"], reverse=True)[:5]
+
+        print(f"[GitHub] ✅ totalRepos={total_repos}  totalStars={total_stars}")
+        print(f"[GitHub] 🗣  languageDistribution={language_distribution}")
+        print(f"[GitHub] ⭐ topRepositories={[r['name'] for r in top_repos]}")
+
+        top_repo_models = [
+            TopRepository(
+                name=r["name"],
+                stars=r["stars"],
+                html_url=r["html_url"],
+                language=r["language"],
+            )
+            for r in top_repos
+        ]
+
+        return GitHubStats(
+            totalRepos=total_repos,
+            totalStars=total_stars,
+            languageDistribution=language_distribution,
+            topRepositories=top_repo_models,
+        )
 
     except Exception as e:
         print(f"[GitHub] ❌ EXCEPTION: {e}")

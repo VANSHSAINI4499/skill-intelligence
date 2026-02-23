@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 
 
@@ -10,9 +10,18 @@ class AnalyzeStudentRequest(BaseModel):
     semester: int
 
 
+class TopRepository(BaseModel):
+    name: str
+    stars: int
+    html_url: str
+    language: Optional[str] = None
+
+
 class GitHubStats(BaseModel):
     totalRepos: int = 0
     totalStars: int = 0
+    languageDistribution: dict[str, int] = Field(default_factory=dict)
+    topRepositories: list[TopRepository] = Field(default_factory=list)
 
 
 class LeetCodeStats(BaseModel):
@@ -24,6 +33,8 @@ class LeetCodeStats(BaseModel):
 class AnalyticsData(BaseModel):
     github_totalRepos: int = 0
     github_totalStars: int = 0
+    github_languageDistribution: dict[str, int] = Field(default_factory=dict)
+    topRepositories: list[TopRepository] = Field(default_factory=list)
     leetcode_easy: int = 0
     leetcode_medium: int = 0
     leetcode_hard: int = 0

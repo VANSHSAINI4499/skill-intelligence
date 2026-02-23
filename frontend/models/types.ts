@@ -44,9 +44,18 @@ export interface AnalyzeStudentPayload {
   semester: number;
 }
 
+export interface TopRepository {
+  name: string;
+  stars: number;
+  html_url: string;
+  language: string | null;
+}
+
 export interface AnalyticsData {
   github_totalRepos: number;
   github_totalStars: number;
+  github_languageDistribution: Record<string, number>;
+  topRepositories: TopRepository[];
   leetcode_easy: number;
   leetcode_medium: number;
   leetcode_hard: number;
