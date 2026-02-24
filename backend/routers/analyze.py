@@ -57,7 +57,7 @@ async def analyze_student(payload: AnalyzeStudentRequest) -> AnalyzeStudentRespo
         print(f"[Analyze] ◄ GitHub:   totalRepos={github_stats.totalRepos}  totalStars={github_stats.totalStars}")
 
         print("[Analyze] ► Step 2 — Fetching LeetCode stats ...")
-        leetcode_stats = fetch_leetcode_stats(payload.leetcodeUsername)
+        leetcode_stats = await fetch_leetcode_stats(payload.leetcodeUsername)
         print(f"[Analyze] ◄ LeetCode: easy={leetcode_stats.easy}  medium={leetcode_stats.medium}  hard={leetcode_stats.hard}")
 
         # ── 2. Compute score & grade ──────────────────────────────────────────
@@ -75,8 +75,10 @@ async def analyze_student(payload: AnalyzeStudentRequest) -> AnalyzeStudentRespo
             leetcode_easy=leetcode_stats.easy,
             leetcode_medium=leetcode_stats.medium,
             leetcode_hard=leetcode_stats.hard,
+            leetcode=leetcode_stats.deep,
         )
-        print(f"[Analyze] Analytics: {analytics.model_dump()}")
+        print(f"[Analyze] Analytics (flat): easy={analytics.leetcode_easy}  medium={analytics.leetcode_medium}  hard={analytics.leetcode_hard}")
+        print(f"[Analyze] Analytics (deep): totalSolved={analytics.leetcode.totalSolved}  langs={len(analytics.leetcode.languageStats)}  tags={len(analytics.leetcode.topicTags)}  recentSubs={len(analytics.leetcode.recentSubmissions)}")
 
         # ── 4. Persist to Firestore ───────────────────────────────────────────
         print(f"[Analyze] ► Step 4 — Writing Firestore users/{payload.userId} ...")
@@ -105,10 +107,25 @@ async def analyze_student(payload: AnalyzeStudentRequest) -> AnalyzeStudentRespo
             "topRepositories": [
                 repo.model_dump() for repo in github_stats.topRepositories
             ],
+            # ─ flat legacy fields (kept for backward compat) ──────────────────
             "leetcode_easy":   leetcode_stats.easy,
             "leetcode_medium": leetcode_stats.medium,
             "leetcode_hard":   leetcode_stats.hard,
-            "lastUpdated":     firestore.SERVER_TIMESTAMP,
+            # ─ deep LeetCode analytics block ────────────────────────────
+            "leetcode": {
+                "totalSolved": leetcode_stats.deep.totalSolved,
+                "difficulty": {
+                    "easy":   leetcode_stats.easy,
+                    "medium": leetcode_stats.medium,
+                    "hard":   leetcode_stats.hard,
+                },
+                "languageStats":      leetcode_stats.deep.languageStats,
+                "topicTags":          leetcode_stats.deep.topicTags,
+                "recentSubmissions": [
+                    sub.model_dump() for sub in leetcode_stats.deep.recentSubmissions
+                ],
+            },
+            "lastUpdated": firestore.SERVER_TIMESTAMP,
         }
 
         print(f"[Analyze] ► Step 5 — analytics_doc to write:")
@@ -119,6 +136,11 @@ async def analyze_student(payload: AnalyzeStudentRequest) -> AnalyzeStudentRespo
         print(f"[Analyze]   leetcode_easy               = {analytics_doc['leetcode_easy']}")
         print(f"[Analyze]   leetcode_medium             = {analytics_doc['leetcode_medium']}")
         print(f"[Analyze]   leetcode_hard               = {analytics_doc['leetcode_hard']}")
+        lc = analytics_doc['leetcode']
+        print(f"[Analyze]   leetcode.totalSolved        = {lc['totalSolved']}")
+        print(f"[Analyze]   leetcode.languageStats      = {lc['languageStats']}")
+        print(f"[Analyze]   leetcode.topicTags (top 5)  = {dict(list(lc['topicTags'].items())[:5])}")
+        print(f"[Analyze]   leetcode.recentSubmissions  = {len(lc['recentSubmissions'])} entries")
 
         print(f"[Analyze] ► Step 5 — Writing Firestore analytics/{payload.userId} ...")
         db.collection("analytics").document(payload.userId).set(

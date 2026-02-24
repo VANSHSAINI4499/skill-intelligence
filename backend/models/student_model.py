@@ -24,10 +24,36 @@ class GitHubStats(BaseModel):
     topRepositories: list[TopRepository] = Field(default_factory=list)
 
 
+# ── LeetCode deep analytics models ───────────────────────────────────────────
+
+class RecentSubmission(BaseModel):
+    title: str
+    titleSlug: str
+    timestamp: int
+    lang: str
+    difficulty: str = ""
+    topicTags: list[str] = Field(default_factory=list)
+
+
+class LeetCodeDifficulty(BaseModel):
+    easy: int = 0
+    medium: int = 0
+    hard: int = 0
+
+
+class LeetCodeDeepStats(BaseModel):
+    totalSolved: int = 0
+    difficulty: LeetCodeDifficulty = Field(default_factory=LeetCodeDifficulty)
+    languageStats: dict[str, int] = Field(default_factory=dict)
+    topicTags: dict[str, int] = Field(default_factory=dict)
+    recentSubmissions: list[RecentSubmission] = Field(default_factory=list)
+
+
 class LeetCodeStats(BaseModel):
     easy: int = 0
     medium: int = 0
     hard: int = 0
+    deep: LeetCodeDeepStats = Field(default_factory=LeetCodeDeepStats)
 
 
 class AnalyticsData(BaseModel):
@@ -38,6 +64,7 @@ class AnalyticsData(BaseModel):
     leetcode_easy: int = 0
     leetcode_medium: int = 0
     leetcode_hard: int = 0
+    leetcode: LeetCodeDeepStats = Field(default_factory=LeetCodeDeepStats)
 
 
 class AnalyzeStudentResponse(BaseModel):

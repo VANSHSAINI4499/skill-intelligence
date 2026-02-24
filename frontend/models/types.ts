@@ -51,14 +51,42 @@ export interface TopRepository {
   language: string | null;
 }
 
+// ── LeetCode deep analytics ──────────────────────────────────────────────────
+
+export interface RecentSubmission {
+  title: string;
+  titleSlug: string;
+  timestamp: number;
+  lang: string;
+  difficulty: string;
+  topicTags: string[];
+}
+
+export interface LeetCodeDifficulty {
+  easy: number;
+  medium: number;
+  hard: number;
+}
+
+export interface LeetCodeDeepStats {
+  totalSolved: number;
+  difficulty: LeetCodeDifficulty;
+  languageStats: Record<string, number>;
+  topicTags: Record<string, number>;
+  recentSubmissions: RecentSubmission[];
+}
+
 export interface AnalyticsData {
   github_totalRepos: number;
   github_totalStars: number;
   github_languageDistribution: Record<string, number>;
   topRepositories: TopRepository[];
+  // flat legacy fields
   leetcode_easy: number;
   leetcode_medium: number;
   leetcode_hard: number;
+  // deep analytics block
+  leetcode?: LeetCodeDeepStats;
 }
 
 export interface AnalyzeStudentResponse {

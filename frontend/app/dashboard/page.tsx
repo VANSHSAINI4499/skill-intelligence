@@ -199,6 +199,7 @@ export default function DashboardPage() {
               easy={analytics?.leetcode_easy ?? 0}
               medium={analytics?.leetcode_medium ?? 0}
               hard={analytics?.leetcode_hard ?? userProfile?.leetcodeHardCount ?? 0}
+              deepStats={analytics?.leetcode}
             />
           </DarkCard>
         </div>
