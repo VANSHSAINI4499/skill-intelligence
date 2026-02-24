@@ -18,6 +18,7 @@ from google.cloud import firestore
 
 from config.firebase import db
 from core.ranking_engine import calculate_grade, calculate_score
+from models.admin_models import AlgorithmWeights
 from models.student_model import AnalyzeStudentRequest, AnalyzeStudentResponse, AnalyticsData
 from services.github_service import fetch_github_stats
 from services.leetcode_service import fetch_leetcode_stats
@@ -60,9 +61,21 @@ async def analyze_student(payload: AnalyzeStudentRequest) -> AnalyzeStudentRespo
         leetcode_stats = await fetch_leetcode_stats(payload.leetcodeUsername)
         print(f"[Analyze] ◄ LeetCode: easy={leetcode_stats.easy}  medium={leetcode_stats.medium}  hard={leetcode_stats.hard}")
 
-        # ── 2. Compute score & grade ──────────────────────────────────────────
-        print("[Analyze] ► Step 3 — Running ranking engine ...")
-        score = calculate_score(github_stats, leetcode_stats, payload.cgpa)
+        print(f"[Analyze] ► Step 3 — Loading algorithm weights ...")
+        weights: AlgorithmWeights | None = None
+        try:
+            config_doc = db.document("algorithm_config/current").get()
+            if config_doc.exists:
+                weights_raw = config_doc.to_dict().get("weights", {})
+                weights = AlgorithmWeights(**weights_raw)
+                print(f"[Analyze] ◄ Custom weights loaded: {weights.model_dump()}")
+            else:
+                print("[Analyze] ◄ No custom weights found — using defaults")
+        except Exception as w_err:
+            print(f"[Analyze] ⚠ Could not load weights ({w_err}) — using defaults")
+
+        print("[Analyze] ► Step 4 — Running ranking engine ...")
+        score = calculate_score(github_stats, leetcode_stats, payload.cgpa, weights)
         grade = calculate_grade(score)
         print(f"[Analyze] ◄ Result: score={score}  grade={grade}")
 
@@ -81,21 +94,31 @@ async def analyze_student(payload: AnalyzeStudentRequest) -> AnalyzeStudentRespo
         print(f"[Analyze] Analytics (deep): totalSolved={analytics.leetcode.totalSolved}  langs={len(analytics.leetcode.languageStats)}  tags={len(analytics.leetcode.topicTags)}  recentSubs={len(analytics.leetcode.recentSubmissions)}")
 
         # ── 4. Persist to Firestore ───────────────────────────────────────────
-        print(f"[Analyze] ► Step 4 — Writing Firestore users/{payload.userId} ...")
-        db.collection("users").document(payload.userId).set(
-            {
-                "grade":             grade,
-                "score":             score,
-                "githubUsername":    payload.githubUsername,
-                "leetcodeUsername":  payload.leetcodeUsername,
-                "cgpa":              payload.cgpa,
-                "semester":          payload.semester,
-                "githubRepoCount":   github_stats.totalRepos,
-                "leetcodeHardCount": leetcode_stats.hard,
-                "updatedAt":         firestore.SERVER_TIMESTAMP,
-            },
-            merge=True,
-        )
+        print(f"[Analyze] ► Step 5 — Writing Firestore users/{payload.userId} ...")
+        user_update: dict = {
+            "grade":             grade,
+            "score":             score,
+            "githubUsername":    payload.githubUsername,
+            "leetcodeUsername":  payload.leetcodeUsername,
+            "cgpa":              payload.cgpa,
+            "semester":          payload.semester,
+            "githubRepoCount":   github_stats.totalRepos,
+            "leetcodeHardCount": leetcode_stats.hard,
+            "updatedAt":         firestore.SERVER_TIMESTAMP,
+            # role defaults to 'student' — never overwrite if already 'admin'
+            "isActive":          True,
+        }
+        if payload.batch is not None:
+            user_update["batch"] = payload.batch
+        if payload.branch is not None:
+            user_update["branch"] = payload.branch
+
+        # Set role only when the document doesn't already have one
+        user_doc_snap = db.collection("users").document(payload.userId).get()
+        if not user_doc_snap.exists or not user_doc_snap.to_dict().get("role"):
+            user_update["role"] = "student"
+
+        db.collection("users").document(payload.userId).set(user_update, merge=True)
         print(f"[Analyze] ✅ users/{payload.userId} updated")
 
         # Build an explicit, fully-typed analytics document so every field
@@ -142,7 +165,7 @@ async def analyze_student(payload: AnalyzeStudentRequest) -> AnalyzeStudentRespo
         print(f"[Analyze]   leetcode.topicTags (top 5)  = {dict(list(lc['topicTags'].items())[:5])}")
         print(f"[Analyze]   leetcode.recentSubmissions  = {len(lc['recentSubmissions'])} entries")
 
-        print(f"[Analyze] ► Step 5 — Writing Firestore analytics/{payload.userId} ...")
+        print(f"[Analyze] ► Step 6 — Writing Firestore analytics/{payload.userId} ...")
         db.collection("analytics").document(payload.userId).set(
             analytics_doc,
             merge=True,

@@ -8,6 +8,8 @@ class AnalyzeStudentRequest(BaseModel):
     leetcodeUsername: str
     cgpa: float
     semester: int
+    batch:  Optional[str] = None   # e.g. "2026"
+    branch: Optional[str] = None   # e.g. "CSE"
 
 
 class TopRepository(BaseModel):
@@ -85,3 +87,7 @@ class FilteredStudent(BaseModel):
     leetcodeHardCount: Optional[int] = 0
     semester: Optional[int] = None
     cgpa: Optional[float] = None
+    batch:    Optional[str]  = None
+    branch:   Optional[str]  = None
+    isActive: Optional[bool] = True
+    role:     Optional[str]  = "student"

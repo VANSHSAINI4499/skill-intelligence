@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from config.settings import settings
 from routers.analyze import router as analyze_router
 from routers.filter import router as filter_router
+from routers.admin import router as admin_router
 
 app = FastAPI(
     title="Skill Intelligence API",
@@ -30,6 +31,7 @@ app.add_middleware(
 # ── Routers ───────────────────────────────────────────────────────────────────
 app.include_router(analyze_router, prefix="/api")
 app.include_router(filter_router,  prefix="/api")
+app.include_router(admin_router,   prefix="/api")
 
 
 @app.get("/", tags=["Health"])

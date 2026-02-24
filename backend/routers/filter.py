@@ -19,13 +19,15 @@ router = APIRouter()
 @router.get(
     "/filter-students",
     response_model=list[FilteredStudent],
-    summary="Filter students by grade, repo count, and LeetCode hard count",
+    summary="Filter students by grade, repo count, LeetCode hard count, batch, and branch",
     tags=["Admin"],
 )
 async def filter_students(
-    grade: Optional[str] = Query(None, description="Grade filter: A, B, C, D"),
-    minRepos: int = Query(0, ge=0, description="Minimum GitHub repo count"),
-    minHard: int = Query(0, ge=0, description="Minimum LeetCode hard solved"),
+    grade:    Optional[str] = Query(None, description="Grade filter: A, B, C, D"),
+    minRepos: int           = Query(0,    ge=0, description="Minimum GitHub repo count"),
+    minHard:  int           = Query(0,    ge=0, description="Minimum LeetCode hard solved"),
+    batch:    Optional[str] = Query(None, description="Batch year, e.g. 2026"),
+    branch:   Optional[str] = Query(None, description="Branch, e.g. CSE"),
 ) -> list[FilteredStudent]:
     docs = db.collection("users").where("role", "==", "student").stream()
 
@@ -34,9 +36,13 @@ async def filter_students(
         data = doc.to_dict()
         data["uid"] = doc.id
 
-        if grade and data.get("grade") != grade:
+        if grade  and data.get("grade")  != grade:
             continue
-        if (data.get("githubRepoCount") or 0) < minRepos:
+        if batch  and data.get("batch")  != batch:
+            continue
+        if branch and data.get("branch") != branch:
+            continue
+        if (data.get("githubRepoCount")    or 0) < minRepos:
             continue
         if (data.get("leetcodeHardCount") or 0) < minHard:
             continue

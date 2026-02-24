@@ -100,3 +100,115 @@ export interface FilterStudentsParams {
   minRepos?: number;
   minHard?: number;
 }
+
+// ── Admin types ───────────────────────────────────────────────────────────────
+
+export interface FilteredStudentDetail {
+  uid: string;
+  name?: string;
+  email?: string;
+  grade?: string;
+  score: number;
+  cgpa?: number;
+  semester?: number;
+  batch?: string;
+  branch?: string;
+  isActive: boolean;
+  githubUsername?: string;
+  leetcodeUsername?: string;
+  githubRepoCount: number;
+  leetcodeHardCount: number;
+  topLanguage?: string;
+  solvedTopics: string[];
+  langDistribution: Record<string, number>;
+}
+
+export interface FilterStudentsResponse {
+  totalStudents: number;
+  filteredStudents: FilteredStudentDetail[];
+  avgScore: number;
+  gradeDistribution: Record<string, number>;
+}
+
+export interface AdminFilterParams {
+  batch?: string;
+  branch?: string;
+  grade?: string;
+  activeOnly?: boolean;
+  minScore?: number;
+  maxScore?: number;
+  minCgpa?: number;
+  minHard?: number;
+  minRepos?: number;
+  language?: string;
+  topicTag?: string;
+}
+
+export interface AlgorithmWeights {
+  leetcode_easy: number;
+  leetcode_medium: number;
+  leetcode_hard: number;
+  github_repos: number;
+  github_stars: number;
+  cgpa: number;
+}
+
+export interface AlgorithmConfigResponse {
+  weights: AlgorithmWeights;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+export interface CreateCompanyRequirementPayload {
+  companyName: string;
+  minCgpa?: number;
+  minHard?: number;
+  minRepos?: number;
+  requiredTopics?: string[];
+  preferredLanguages?: string[];
+}
+
+export interface CompanyRequirement {
+  id: string;
+  companyName: string;
+  minCgpa?: number;
+  minHard?: number;
+  minRepos?: number;
+  requiredTopics: string[];
+  preferredLanguages: string[];
+  createdAt?: string;
+}
+
+export interface GenerateShortlistPayload {
+  companyId: string;
+  batch: string;
+  topN?: number;
+}
+
+export interface RankedStudent {
+  rank: number;
+  uid: string;
+  name?: string;
+  email?: string;
+  score: number;
+  grade?: string;
+  cgpa?: number;
+  leetcodeHard: number;
+  githubRepos: number;
+  githubUsername?: string;
+  leetcodeUsername?: string;
+  batch?: string;
+  branch?: string;
+}
+
+export interface ShortlistResult {
+  shortlistId: string;
+  companyId: string;
+  companyName?: string;
+  batch: string;
+  generatedBy: string;
+  selectedStudents: string[];
+  rankedStudents: RankedStudent[];
+  totalCandidates: number;
+  createdAt?: string;
+}
