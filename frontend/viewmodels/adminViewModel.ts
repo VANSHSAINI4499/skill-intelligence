@@ -1,15 +1,14 @@
 "use client";
 /**
  * Admin ViewModels (MVVM)
- * One hook per page section — zero Firestore calls, all through adminApiService.
+ * One hook per page section — zero Firestore calls, all through adminService.
  */
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { onAuthStateChanged } from "firebase/auth";
-import { auth } from "@/lib/firebase";
 import { firebaseService } from "@/services/firebaseService";
-import { adminApiService } from "@/services/adminApiService";
+import { adminService } from "@/services/adminService";
+import { useAuth } from "@/hooks/useAuth";
 import {
   AdminFilterParams,
   AlgorithmWeights,
@@ -17,7 +16,6 @@ import {
   CreateCompanyRequirementPayload,
   FilteredStudentDetail,
   FilterStudentsResponse,
-  GenerateShortlistPayload,
   RankedStudent,
   ShortlistResult,
 } from "@/models/types";
@@ -25,29 +23,21 @@ import {
 // ─── Shared admin auth guard ──────────────────────────────────────────────────
 
 export function useAdminAuth() {
-  const [adminUid, setAdminUid] = useState<string | null>(null);
-  const [adminName, setAdminName] = useState<string>("Administrator");
-  const [authReady, setAuthReady] = useState(false);
+  // useAuth({ required: "admin" }) handles redirect automatically:
+  //   - not logged in → /login
+  //   - logged in as student → /dashboard
+  const { user, role, universityId, loading } = useAuth({ required: "admin" });
   const router = useRouter();
 
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      if (!user) { router.push("/login"); return; }
-      const profile = await firebaseService.getUserProfile(user.uid);
-      if (profile?.role !== "admin") { router.push("/dashboard"); return; }
-      setAdminUid(user.uid);
-      setAdminName(profile.name || "Administrator");
-      setAuthReady(true);
-    });
-    return () => unsub();
-  }, [router]);
+  const adminName = user?.displayName || user?.email?.split("@")[0] || "Administrator";
+  const authReady = !loading && role === "admin";
 
   const logout = useCallback(async () => {
     await firebaseService.logout();
     router.push("/login");
   }, [router]);
 
-  return { adminUid, adminName, authReady, logout };
+  return { adminUid: user?.uid ?? null, adminName, authReady, universityId, logout };
 }
 
 // ─── Overview ─────────────────────────────────────────────────────────────────
@@ -70,7 +60,7 @@ export function useOverviewViewModel() {
     setLoading(true);
     setError(null);
     try {
-      const res: FilterStudentsResponse = await adminApiService.filterStudents({
+      const res: FilterStudentsResponse = await adminService.getStudents({
         activeOnly: false,
       });
       const students = res.filteredStudents;
@@ -126,7 +116,7 @@ export function useStudentsViewModel() {
     setLoading(true);
     setError(null);
     try {
-      const res = await adminApiService.filterStudents(f);
+      const res = await adminService.getStudents(f);
       setStudents(res.filteredStudents);
       setTotalStudents(res.totalStudents);
       setAvgScore(res.avgScore);
@@ -179,7 +169,7 @@ export function useAlgorithmViewModel() {
   useEffect(() => {
     (async () => {
       try {
-        const cfg = await adminApiService.getAlgorithmConfig();
+        const cfg = await adminService.getAlgorithmConfig();
         setWeights(cfg.weights);
         setSavedWeights(cfg.weights);
         setUpdatedAt(cfg.updatedAt || null);
@@ -196,7 +186,7 @@ export function useAlgorithmViewModel() {
   const saveWeights = async () => {
     setSaving(true); setError(null);
     try {
-      const cfg = await adminApiService.updateAlgorithmConfig(weights);
+      const cfg = await adminService.updateAlgorithmConfig(weights);
       setSavedWeights(cfg.weights);
       setUpdatedAt(cfg.updatedAt || null);
       setSaved(true);
@@ -240,7 +230,7 @@ export function useRequirementsViewModel() {
   const loadRequirements = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await adminApiService.getCompanyRequirements();
+      const data = await adminService.getCompanyRequirements();
       setRequirements(data);
     } catch (e: any) {
       setError(e.message || "Failed to load requirements");
@@ -274,7 +264,7 @@ export function useRequirementsViewModel() {
     if (!form.companyName.trim()) { setError("Company name is required"); return; }
     setSubmitting(true); setError(null);
     try {
-      await adminApiService.createCompanyRequirement(form);
+      await adminService.createCompanyRequirement(form);
       setForm(EMPTY_FORM); setTopicInput(""); setLangInput("");
       setSuccessMsg("Saved successfully");
       setTimeout(() => setSuccessMsg(null), 3000);
@@ -286,8 +276,8 @@ export function useRequirementsViewModel() {
 
   const deleteRequirement = async (id: string) => {
     try {
-      await adminApiService.deleteCompanyRequirement(id);
-      setRequirements((prev) => prev.filter((r) => r.id !== id));
+      await adminService.deactivateCompanyRequirement(id);
+      setRequirements((prev) => prev.filter((r) => r.companyId !== id));
     } catch (e: any) { setError(e.message || "Failed to delete"); }
   };
 
@@ -317,8 +307,8 @@ export function useShortlistViewModel() {
     (async () => {
       try {
         const [comps, history] = await Promise.all([
-          adminApiService.getCompanyRequirements(),
-          adminApiService.getShortlists(),
+          adminService.getCompanyRequirements(),
+          adminService.getShortlists(),
         ]);
         setCompanies(comps);
         setShortlists(history);
@@ -331,7 +321,7 @@ export function useShortlistViewModel() {
     if (!selectedCompanyId || !batch) { setError("Select a company and enter batch"); return; }
     setGenerating(true); setError(null);
     try {
-      const result = await adminApiService.generateShortlist({ companyId: selectedCompanyId, batch, topN });
+      const result = await adminService.generateShortlist({ companyId: selectedCompanyId, batch, limit: topN });
       setActiveShortlist(result);
       setShortlists((prev) => [result, ...prev]);
     } catch (e: any) { setError(e.message || "Generation failed"); }
@@ -369,7 +359,7 @@ export function useReportsViewModel() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await adminApiService.filterStudents({ activeOnly: false });
+        const res = await adminService.getStudents({ activeOnly: false });
         setData(res);
       } catch (e: any) { setError(e.message || "Failed to load"); }
       finally { setLoading(false); }

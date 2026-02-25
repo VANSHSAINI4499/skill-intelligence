@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
 import { firebaseService } from '@/services/firebaseService';
-import { apiService } from '@/services/apiService';
+import { studentService } from '@/services/studentService';
 import { UserProfile, AnalyticsData } from '@/models/types';
-import { auth } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
-import { onAuthStateChanged } from 'firebase/auth';
+import { useAuth } from '@/hooks/useAuth';
 
 export function useDashboardViewModel() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -14,73 +13,58 @@ export function useDashboardViewModel() {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
+  // Enforce student-only access. Redirects to /login or /admin if wrong role.
+  const { user, loading: authLoading } = useAuth({ required: "student" });
+
   // Form states
   const [githubUsername, setGithubUsername] = useState('');
   const [leetcodeUsername, setLeetcodeUsername] = useState('');
   const [cgpa, setCgpa] = useState<string>('');
-  const [semester, setSemester] = useState<string>('');
+  const [batch, setBatch] = useState<string>('');
+  const [branch, setBranch] = useState<string>('');
 
-  const loadUserData = async (uid: string) => {
+  const loadUserData = async () => {
     const [profile, analyticsData] = await Promise.all([
-      firebaseService.getUserProfile(uid),
-      firebaseService.getUserAnalytics(uid),
+      studentService.getProfile(),
+      firebaseService.getUserAnalytics(user!.uid),
     ]);
     if (profile) {
       setUserProfile(profile);
       setGithubUsername(profile.githubUsername || '');
       setLeetcodeUsername(profile.leetcodeUsername || '');
       setCgpa(profile.cgpa?.toString() || '');
-      setSemester(profile.semester?.toString() || '');
+      setBatch(profile.batch || '');
+      setBranch(profile.branch || '');
     }
     if (analyticsData) setAnalytics(analyticsData);
   };
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        try {
-          await loadUserData(user.uid);
-        } catch (err) {
-          console.error("Error fetching profile", err);
-          setError("Failed to load profile");
-        }
-      } else {
-        router.push('/login');
-      }
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [router]);
+    if (authLoading || !user) return;  // wait for auth to resolve
+    setLoading(true);
+    loadUserData()
+      .catch((err) => setError(err.message || "Failed to load profile"))
+      .finally(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, user]);
 
   const updateProfile = async () => {
     if (!userProfile) return;
     setAnalyzing(true);
     setError(null);
     try {
-      const cgpaNum     = parseFloat(cgpa) || 0;
-      const semesterNum = parseInt(semester) || 1;
+      const cgpaNum = parseFloat(cgpa) || 0;
 
-      // 1. Persist form fields to Firestore immediately
-      await firebaseService.updateUserProfile(userProfile.uid, {
+      // Single API call — server fetches GitHub/LeetCode, scores, writes Firestore
+      const result = await studentService.analyze({
         githubUsername,
         leetcodeUsername,
         cgpa: cgpaNum,
-        semester: semesterNum,
+        batch,
+        branch,
       });
 
-      // 2. Hit FastAPI — fetches GitHub/LeetCode, scores the student,
-      //    and writes grade + score back to Firestore; response has everything we need
-      const result = await apiService.analyzeStudent({
-        userId: userProfile.uid,
-        githubUsername,
-        leetcodeUsername,
-        cgpa: cgpaNum,
-        semester: semesterNum,
-      });
-
-      // 3. Apply the API response directly to state — no Firestore re-fetch required
-      //    (avoids the window where Firestore write hasn't propagated yet)
+      // Apply API response to state immediately (no Firestore re-fetch needed)
       setUserProfile((prev) =>
         prev
           ? {
@@ -90,7 +74,8 @@ export function useDashboardViewModel() {
               githubUsername,
               leetcodeUsername,
               cgpa: cgpaNum,
-              semester: semesterNum,
+              batch,
+              branch,
               githubRepoCount: result.analytics.github_totalRepos,
               leetcodeHardCount: result.analytics.leetcode_hard,
             }
@@ -119,7 +104,8 @@ export function useDashboardViewModel() {
     githubUsername, setGithubUsername,
     leetcodeUsername, setLeetcodeUsername,
     cgpa, setCgpa,
-    semester, setSemester,
+    batch, setBatch,
+    branch, setBranch,
     updateProfile,
     handleLogout
   };

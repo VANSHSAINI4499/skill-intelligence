@@ -9,14 +9,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config.settings import settings
-from routers.analyze import router as analyze_router
-from routers.filter import router as filter_router
-from routers.admin import router as admin_router
+from routers.auth    import router as auth_router
+from routers.admin   import router as admin_router
+from routers.student import router as student_router
 
 app = FastAPI(
     title="Skill Intelligence API",
-    description="Backend for the Skill Intelligence Platform",
-    version="1.0.0",
+    description="Multi-university Skill Intelligence SaaS — FastAPI Backend",
+    version="2.0.0",
 )
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
@@ -29,11 +29,11 @@ app.add_middleware(
 )
 
 # ── Routers ───────────────────────────────────────────────────────────────────
-app.include_router(analyze_router, prefix="/api")
-app.include_router(filter_router,  prefix="/api")
-app.include_router(admin_router,   prefix="/api")
+app.include_router(auth_router,    prefix="/api")   # /api/auth/*
+app.include_router(admin_router,   prefix="/api")   # /api/admin/*
+app.include_router(student_router, prefix="/api")   # /api/student/*
 
 
 @app.get("/", tags=["Health"])
 async def root():
-    return {"status": "ok", "message": "Skill Intelligence API is running"}
+    return {"status": "ok", "message": "Skill Intelligence API v2.0 is running"}

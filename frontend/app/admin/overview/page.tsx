@@ -9,6 +9,9 @@ import {
   XAxis, YAxis, Tooltip, Legend,
 } from "recharts";
 import { useOverviewViewModel } from "@/viewmodels/adminViewModel";
+import { useAuthContext } from "@/context/AuthContext";
+import { Copy, CheckCheck } from "lucide-react";
+import { useState } from "react";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const GRADE_COLORS: Record<string, string> = {
@@ -48,6 +51,15 @@ const DarkTooltip = ({ active, payload, label }: any) => {
 
 export default function OverviewPage() {
   const { stats, loading, error, refresh } = useOverviewViewModel();
+  const { universityId } = useAuthContext();
+  const [idCopied, setIdCopied] = useState(false);
+
+  const copyUniversityId = () => {
+    if (!universityId) return;
+    navigator.clipboard.writeText(universityId);
+    setIdCopied(true);
+    setTimeout(() => setIdCopied(false), 2500);
+  };
 
   if (loading) {
     return (
@@ -116,6 +128,24 @@ export default function OverviewPage() {
 
   return (
     <div className="space-y-6">
+      {/* University ID banner — always visible so admin can share it */}
+      {universityId && (
+        <div className="flex items-center justify-between bg-[#0c1627] border border-cyan-500/20 rounded-xl px-4 py-3 gap-4">
+          <div className="min-w-0">
+            <p className="text-xs text-slate-500 uppercase tracking-wider">University ID — share with students</p>
+            <code className="text-cyan-300 font-mono text-sm truncate block">{universityId}</code>
+          </div>
+          <button
+            onClick={copyUniversityId}
+            title="Copy University ID"
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 text-cyan-400 text-xs transition"
+          >
+            {idCopied ? <CheckCheck className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+            {idCopied ? "Copied!" : "Copy"}
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

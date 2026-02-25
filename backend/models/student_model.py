@@ -1,15 +1,28 @@
-from pydantic import BaseModel, Field
+import re
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 
 
 class AnalyzeStudentRequest(BaseModel):
-    userId: str
-    githubUsername: str
+    userId:           str
+    githubUsername:   str
     leetcodeUsername: str
-    cgpa: float
-    semester: int
-    batch:  Optional[str] = None   # e.g. "2026"
-    branch: Optional[str] = None   # e.g. "CSE"
+    cgpa:             float
+    batch:            str            # "YYYY-YYYY" (required)
+    branch:           Optional[str] = None
+
+    # semester kept as optional for backwards-compat with any existing clients
+    semester: Optional[int] = None
+
+    @field_validator("batch")
+    @classmethod
+    def validate_batch(cls, v: str) -> str:
+        if not re.match(r"^\d{4}-\d{4}$", v):
+            raise ValueError("batch must be in format YYYY-YYYY (e.g. 2023-2027)")
+        start, end = int(v[:4]), int(v[5:])
+        if end - start != 4:
+            raise ValueError("batch end year must equal start year + 4")
+        return v
 
 
 class TopRepository(BaseModel):
@@ -76,18 +89,17 @@ class AnalyzeStudentResponse(BaseModel):
 
 
 class FilteredStudent(BaseModel):
-    uid: str
-    name: Optional[str] = None
-    email: Optional[str] = None
-    grade: Optional[str] = None
-    score: Optional[float] = None
-    githubUsername: Optional[str] = None
-    leetcodeUsername: Optional[str] = None
-    githubRepoCount: Optional[int] = 0
-    leetcodeHardCount: Optional[int] = 0
-    semester: Optional[int] = None
-    cgpa: Optional[float] = None
-    batch:    Optional[str]  = None
-    branch:   Optional[str]  = None
-    isActive: Optional[bool] = True
-    role:     Optional[str]  = "student"
+    uid:              str
+    name:             Optional[str]   = None
+    email:            Optional[str]   = None
+    grade:            Optional[str]   = None
+    score:            Optional[float] = None
+    githubUsername:   Optional[str]   = None
+    leetcodeUsername: Optional[str]   = None
+    githubRepoCount:  Optional[int]   = 0
+    leetcodeHardCount:Optional[int]   = 0
+    batch:            Optional[str]   = None   # "YYYY-YYYY"
+    branch:           Optional[str]   = None
+    cgpa:             Optional[float] = None
+    isActive:         Optional[bool]  = True
+    role:             Optional[str]   = "student"

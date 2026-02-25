@@ -106,24 +106,36 @@ def calculate_grade(score: float) -> str:
 
 # ── Live weight loader (reads Firestore, falls back to defaults) ──────────────
 
-def load_weights() -> "AlgorithmWeights":
+def load_weights(university_id: str = "") -> "AlgorithmWeights":
     """
-    Reads algorithm_config/current from Firestore and returns an
-    AlgorithmWeights instance, or a default instance if the document
-    doesn't exist or an error occurs.
+    Reads the algorithm_config/current document for the given university from
+    Firestore and returns an AlgorithmWeights instance.
 
-    Importing here (not at module level) avoids a circular-import chain
-    since admin_models → (nothing), ranking_engine → admin_models (TYPE_CHECKING).
+    Path (multi-tenant):  universities/{university_id}/algorithm_config/current
+    Legacy fallback path: algorithm_config/current  (when university_id is empty)
+
+    Falls back to default weights when the document is missing or on error.
     """
     from config.firebase import db          # local import — avoids circular dep
     from models.admin_models import AlgorithmWeights
 
     try:
-        doc = db.document("algorithm_config/current").get()
+        if university_id:
+            doc = (
+                db.collection("universities")
+                .document(university_id)
+                .collection("algorithm_config")
+                .document("current")
+                .get()
+            )
+        else:
+            # Legacy flat path (kept for backward compatibility)
+            doc = db.document("algorithm_config/current").get()
+
         if doc.exists:
             weights_raw = doc.to_dict().get("weights", {})
             weights = AlgorithmWeights(**weights_raw)
-            print(f"[RankingEngine] ✅ Loaded Firestore weights: {weights.model_dump()}")
+            print(f"[RankingEngine] ✅ Loaded Firestore weights (university={university_id or 'legacy'}): {weights.model_dump()}")
             return weights
     except Exception as exc:
         print(f"[RankingEngine] ⚠ Could not load Firestore weights ({exc}) — using defaults")

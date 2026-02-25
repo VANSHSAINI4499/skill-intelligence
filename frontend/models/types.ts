@@ -1,9 +1,18 @@
+/**
+ * types.ts — Shared TypeScript interfaces for the Skill Intelligence Platform
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Keep in sync with the FastAPI Pydantic models in backend/models/.
+ */
+
+// ─── Core user ────────────────────────────────────────────────────────────────
+
 export interface UserProfile {
   uid: string;
   name: string;
   email: string;
-  role: 'student' | 'admin';
-  semester?: number | null;
+  role: "student" | "admin";
+  batch?: string | null;           // "YYYY-YYYY"
+  branch?: string | null;
   cgpa?: number | null;
   githubUsername?: string;
   leetcodeUsername?: string;
@@ -14,35 +23,17 @@ export interface UserProfile {
   leetcodeEasyCount?: number;
   leetcodeMediumCount?: number;
   leetcodeHardCount?: number;
-  updatedAt?: any;
-  createdAt: any; // Timestamp
+  isActive?: boolean;
+  updatedAt?: unknown;
+  createdAt?: unknown;
 }
 
-// Merged dashboard view — profile + live analytics
+/** Merged dashboard view — profile + live analytics */
 export interface DashboardData extends UserProfile {
   analytics?: AnalyticsData;
 }
 
-export interface StudentAnalytics {
-  leetcodeDifficulty: {
-    easy: number;
-    medium: number;
-    hard: number;
-  };
-  languageDistribution: {
-    [key: string]: number;
-  };
-}
-
-// ── FastAPI backend types ────────────────────────────────────────────────────
-
-export interface AnalyzeStudentPayload {
-  userId: string;
-  githubUsername: string;
-  leetcodeUsername: string;
-  cgpa: number;
-  semester: number;
-}
+// ─── Analytics data (returned from /student/analyze) ─────────────────────────
 
 export interface TopRepository {
   name: string;
@@ -50,8 +41,6 @@ export interface TopRepository {
   html_url: string;
   language: string | null;
 }
-
-// ── LeetCode deep analytics ──────────────────────────────────────────────────
 
 export interface RecentSubmission {
   title: string;
@@ -81,11 +70,9 @@ export interface AnalyticsData {
   github_totalStars: number;
   github_languageDistribution: Record<string, number>;
   topRepositories: TopRepository[];
-  // flat legacy fields
   leetcode_easy: number;
   leetcode_medium: number;
   leetcode_hard: number;
-  // deep analytics block
   leetcode?: LeetCodeDeepStats;
 }
 
@@ -95,13 +82,33 @@ export interface AnalyzeStudentResponse {
   analytics: AnalyticsData;
 }
 
-export interface FilterStudentsParams {
-  grade?: string;
-  minRepos?: number;
-  minHard?: number;
+// ─── Student analyze payload (POST /student/analyze) ─────────────────────────
+
+export interface AnalyzeStudentPayload {
+  githubUsername: string;
+  leetcodeUsername: string;
+  cgpa: number;
+  batch: string;    // "YYYY-YYYY"
+  branch: string;
 }
 
-// ── Admin types ───────────────────────────────────────────────────────────────
+// ─── Admin filter params (GET /admin/students) ────────────────────────────────
+
+export interface AdminFilterParams {
+  batch?: string;
+  branch?: string;
+  grade?: string;
+  activeOnly?: boolean;
+  sortBy?: "score" | "name" | "cgpa";
+  order?: "asc" | "desc";
+  minScore?: number;
+  maxScore?: number;
+  minCgpa?: number;
+  minHard?: number;
+  minRepos?: number;
+}
+
+// ─── Student list (GET /admin/students) ──────────────────────────────────────
 
 export interface FilteredStudentDetail {
   uid: string;
@@ -110,7 +117,6 @@ export interface FilteredStudentDetail {
   grade?: string;
   score: number;
   cgpa?: number;
-  semester?: number;
   batch?: string;
   branch?: string;
   isActive: boolean;
@@ -118,9 +124,6 @@ export interface FilteredStudentDetail {
   leetcodeUsername?: string;
   githubRepoCount: number;
   leetcodeHardCount: number;
-  topLanguage?: string;
-  solvedTopics: string[];
-  langDistribution: Record<string, number>;
 }
 
 export interface FilterStudentsResponse {
@@ -130,19 +133,28 @@ export interface FilterStudentsResponse {
   gradeDistribution: Record<string, number>;
 }
 
-export interface AdminFilterParams {
-  batch?: string;
-  branch?: string;
+// ─── Batch analytics (GET /admin/batch-analytics/{batch}) ────────────────────
+
+export interface BatchTopPerformer {
+  uid: string;
+  name?: string;
+  email?: string;
+  score: number;
   grade?: string;
-  activeOnly?: boolean;
-  minScore?: number;
-  maxScore?: number;
-  minCgpa?: number;
-  minHard?: number;
-  minRepos?: number;
-  language?: string;
-  topicTag?: string;
+  cgpa?: number;
+  batch?: string;
 }
+
+export interface BatchAnalytics {
+  batch: string;
+  totalStudents: number;
+  avgScore: number;
+  avgCGPA: number;
+  gradeDistribution: Record<string, number>;
+  topPerformers: BatchTopPerformer[];
+}
+
+// ─── Algorithm config (GET/PUT /admin/algorithm-config) ──────────────────────
 
 export interface AlgorithmWeights {
   leetcode_easy: number;
@@ -159,30 +171,45 @@ export interface AlgorithmConfigResponse {
   updatedBy?: string;
 }
 
+// ─── Company requirements ─────────────────────────────────────────────────────
+
 export interface CreateCompanyRequirementPayload {
   companyName: string;
-  minCgpa?: number;
-  minHard?: number;
+  minCGPA?: number;
+  minLeetCodeHard?: number;
   minRepos?: number;
   requiredTopics?: string[];
   preferredLanguages?: string[];
 }
 
+export interface PatchCompanyRequirementPayload {
+  companyName?: string;
+  minCGPA?: number;
+  minLeetCodeHard?: number;
+  minRepos?: number;
+  requiredTopics?: string[];
+  preferredLanguages?: string[];
+  isActive?: boolean;
+}
+
 export interface CompanyRequirement {
-  id: string;
+  companyId: string;
   companyName: string;
-  minCgpa?: number;
-  minHard?: number;
+  minCGPA?: number;
+  minLeetCodeHard?: number;
   minRepos?: number;
   requiredTopics: string[];
   preferredLanguages: string[];
   createdAt?: string;
 }
 
+// ─── Shortlists ───────────────────────────────────────────────────────────────
+
+/** POST /admin/shortlists request body */
 export interface GenerateShortlistPayload {
   companyId: string;
   batch: string;
-  topN?: number;
+  limit?: number;    // default 20
 }
 
 export interface RankedStudent {
@@ -212,3 +239,7 @@ export interface ShortlistResult {
   totalCandidates: number;
   createdAt?: string;
 }
+
+// ─── FilterStudentsParams — legacy alias ──────────────────────────────────────
+/** @deprecated Use AdminFilterParams */
+export type FilterStudentsParams = AdminFilterParams;
