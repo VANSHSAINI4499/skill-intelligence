@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Star, GitFork, TrendingUp, AlertCircle } from "lucide-react";
+import { Star, GitFork, TrendingUp, AlertCircle, ExternalLink, GitBranch } from "lucide-react";
 import {
   ResponsiveContainer,
   PieChart,
@@ -9,11 +9,13 @@ import {
   Cell,
   Tooltip,
 } from "recharts";
+import { TopRepository } from "@/models/types";
 
 interface GithubPulseCardProps {
   totalRepos?: number;
   totalStars?: number;
   languageDistribution?: Record<string, number>;
+  repositories?: TopRepository[];
 }
 
 // Canonical color map for well-known languages
@@ -62,6 +64,7 @@ export function GithubPulseCard({
   totalRepos = 0,
   totalStars = 0,
   languageDistribution = {},
+  repositories = [],
 }: GithubPulseCardProps) {
   const langEntries = Object.entries(languageDistribution).sort(([, a], [, b]) => b - a);
   const total = langEntries.reduce((s, [, v]) => s + v, 0);
@@ -69,7 +72,7 @@ export function GithubPulseCard({
   const hasData   = chartData.length > 0;
 
   return (
-    <div className="flex flex-col gap-5 h-full">
+    <div className="flex flex-col gap-5">
 
       {/* ── Stat chips ───────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-4">
@@ -79,7 +82,7 @@ export function GithubPulseCard({
             <span className="text-xs text-slate-400 uppercase tracking-wider">Repositories</span>
           </div>
           <motion.span
-            className="text-4xl font-extrabold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent"
+            className="text-4xl font-extrabold bg-linear-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
@@ -94,7 +97,7 @@ export function GithubPulseCard({
             <span className="text-xs text-slate-400 uppercase tracking-wider">Total Stars</span>
           </div>
           <motion.span
-            className="text-4xl font-extrabold bg-gradient-to-r from-amber-400 to-yellow-300 bg-clip-text text-transparent"
+            className="text-4xl font-extrabold bg-linear-to-r from-amber-400 to-yellow-300 bg-clip-text text-transparent"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
@@ -105,7 +108,7 @@ export function GithubPulseCard({
       </div>
 
       {/* ── Language distribution ────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex flex-col">
         <div className="flex items-center gap-2 mb-3">
           <TrendingUp size={14} className="text-violet-400" />
           <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
@@ -117,7 +120,7 @@ export function GithubPulseCard({
         </div>
 
         {!hasData ? (
-          <div className="flex flex-col items-center justify-center flex-1 gap-2 min-h-[160px]
+          <div className="flex flex-col items-center justify-center flex-1 gap-2 min-h-40
                           rounded-xl border border-dashed border-slate-700/60 bg-slate-800/20">
             <AlertCircle size={20} className="text-slate-600" />
             <p className="text-xs text-slate-500">No language data available</p>
@@ -162,7 +165,7 @@ export function GithubPulseCard({
                     <div className="flex justify-between text-xs mb-1">
                       <span className="flex items-center gap-1.5">
                         <span
-                          className="w-2 h-2 rounded-full flex-shrink-0"
+                          className="w-2 h-2 rounded-full shrink-0"
                           style={{ background: color }}
                         />
                         <span className="text-slate-300">{lang}</span>
@@ -189,6 +192,49 @@ export function GithubPulseCard({
           </div>
         )}
       </div>
+
+      {/* ── Top Repositories ──────────────────────────────────────────────── */}
+      {repositories.length > 0 && (
+        <div className="mt-1">
+          <div className="flex items-center gap-2 mb-3">
+            <GitBranch size={14} className="text-cyan-400" />
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              Top Repositories
+            </span>
+            <span className="ml-auto text-xs text-slate-600">{repositories.length} repos</span>
+          </div>
+          <div className="space-y-2">
+            {repositories.slice(0, 5).map((repo, i) => (
+              <motion.a
+                key={repo.name}
+                href={repo.html_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                initial={{ opacity: 0, x: -6 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.08 * i }}
+                whileHover={{ backgroundColor: "rgba(6,182,212,0.04)" }}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-slate-700/50 bg-[#0B1120] hover:border-cyan-500/30 group transition-colors duration-150"
+              >
+                <span className="text-[10px] text-slate-700 font-mono w-3 shrink-0">{i + 1}</span>
+                <span className="flex-1 text-xs text-slate-300 font-medium truncate group-hover:text-cyan-300 transition-colors">
+                  {repo.name}
+                  <ExternalLink className="inline ml-1 w-2.5 h-2.5 opacity-0 group-hover:opacity-50 transition-opacity" />
+                </span>
+                {repo.language && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-700/60 border border-slate-600/50 text-slate-400 shrink-0">
+                    {repo.language}
+                  </span>
+                )}
+                <span className="flex items-center gap-1 text-[10px] text-amber-400 shrink-0">
+                  <Star size={10} />
+                  {repo.stars}
+                </span>
+              </motion.a>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

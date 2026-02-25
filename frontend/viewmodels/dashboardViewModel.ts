@@ -5,10 +5,30 @@ import { UserProfile, AnalyticsData } from '@/models/types';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 
+/**
+ * loadingStep tracks real progress through the startup pipeline:
+ *  0 — waiting for Firebase auth to resolve
+ *  1 — auth done, fetching profile from backend
+ *  2 — profile received, fetching stored analytics
+ *  3 — analytics received, applying state
+ *  4 — all done — show the dashboard
+ */
+const STEP_PCT:   Record<number, number> = { 0: 5,  1: 30, 2: 60, 3: 85, 4: 100 };
+const STEP_LABEL: Record<number, string> = {
+  0: "Authenticating…",
+  1: "Connecting to server…",
+  2: "Loading profile…",
+  3: "Loading analytics…",
+  4: "Ready!",
+};
+
 export function useDashboardViewModel() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
-  const [loading, setLoading] = useState(true);
+  // 0-4 steps; page is gated until step === 4
+  const [loadingStep, setLoadingStep] = useState<number>(0);
+  // Separate fatal-load error (shown on the loading screen, page stays gated)
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -24,33 +44,53 @@ export function useDashboardViewModel() {
   const [branch, setBranch] = useState<string>('');
 
   const loadUserData = async () => {
-    // Load profile and analytics in parallel so deep LeetCode stats
-    // (languageStats, topicTags, recentSubmissions) are visible on every page load.
-    const [profile, savedAnalytics] = await Promise.allSettled([
-      studentService.getProfile(),
-      studentService.getAnalytics(),
-    ]);
+    setLoadError(null);
 
-    if (profile.status === "fulfilled" && profile.value) {
-      setUserProfile(profile.value);
-      setGithubUsername(profile.value.githubUsername || '');
-      setLeetcodeUsername(profile.value.leetcodeUsername || '');
-      setCgpa(profile.value.cgpa?.toString() || '');
-      setBatch(profile.value.batch || '');
-      setBranch(profile.value.branch || '');
-    }
+    // Step 1 — profile (sequential so each step advances the ring)
+    setLoadingStep(1);
+    const profile = await studentService.getProfile(); // throws on 401/network
+    setLoadingStep(2);
 
-    if (savedAnalytics.status === "fulfilled" && savedAnalytics.value) {
-      setAnalytics(savedAnalytics.value);
+    // Step 2 — analytics (non-fatal: absent before first Analyze run)
+    let savedAnalytics: AnalyticsData | undefined;
+    try {
+      savedAnalytics = await studentService.getAnalytics();
+    } catch {
+      // analytics doc may not exist yet — not a fatal error, continue
     }
+    setLoadingStep(3);
+
+    // Apply state
+    setUserProfile(profile);
+    setGithubUsername(profile.githubUsername || '');
+    setLeetcodeUsername(profile.leetcodeUsername || '');
+    setCgpa(profile.cgpa?.toString() || '');
+    setBatch(profile.batch || '');
+    setBranch(profile.branch || '');
+    if (savedAnalytics) setAnalytics(savedAnalytics);
+
+    // Only set 100 % AFTER everything is applied — page unblocks here
+    setLoadingStep(4);
+  };
+
+  // Retry: reset step back to 0 and re-run the pipeline
+  const retryLoad = () => {
+    setLoadingStep(0);
+    setLoadError(null);
+    loadUserData().catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : "Failed to load profile";
+      setLoadError(msg);
+      // intentionally do NOT advance to step 4 — page stays on error screen
+    });
   };
 
   useEffect(() => {
     if (authLoading || !user) return;  // wait for auth to resolve
-    setLoading(true);
-    loadUserData()
-      .catch((err) => setError(err.message || "Failed to load profile"))
-      .finally(() => setLoading(false));
+    loadUserData().catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : "Failed to load profile";
+      setLoadError(msg);
+      // intentionally do NOT advance to step 4 — page stays gated
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user]);
 
@@ -109,7 +149,9 @@ export function useDashboardViewModel() {
   return {
     userProfile,
     analytics,
-    loading,
+    loadingStep,
+    loadError,
+    retryLoad,
     analyzing,
     error,
     githubUsername, setGithubUsername,
@@ -118,6 +160,9 @@ export function useDashboardViewModel() {
     batch, setBatch,
     branch, setBranch,
     updateProfile,
-    handleLogout
+    handleLogout,
+    // convenience: percent + label for driving the loading screen
+    loadingPct:   STEP_PCT[loadingStep]   ?? 5,
+    loadingLabel: STEP_LABEL[loadingStep] ?? "Loading…",
   };
 }

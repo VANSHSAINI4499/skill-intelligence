@@ -31,13 +31,26 @@ export class ApiError extends Error {
 /**
  * @param timeoutMs  Abort after this many ms. Default 30 000 (30 s).
  *                   Pass 0 to disable. Use 90 000 for slow endpoints like /analyze.
+ *
+ * Automatically retries once with a force-refreshed token when the server
+ * returns 401 — this fixes race conditions where the cached Firebase token
+ * hasn't propagated yet on first page load.
  */
 export async function apiRequest<T>(
   path: string,
   init?: RequestInit,
   timeoutMs = 30_000,
 ): Promise<T> {
-  const token = await auth.currentUser?.getIdToken(/* forceRefresh */ false);
+  return _doRequest<T>(path, init, timeoutMs, /* forceRefresh= */ false);
+}
+
+async function _doRequest<T>(
+  path: string,
+  init: RequestInit | undefined,
+  timeoutMs: number,
+  forceRefresh: boolean,
+): Promise<T> {
+  const token = await auth.currentUser?.getIdToken(forceRefresh);
 
   // AbortController so long requests don't hang the UI forever
   const controller = new AbortController();
@@ -66,6 +79,11 @@ export async function apiRequest<T>(
     throw new ApiError(0, "Cannot reach the server. Check that the backend is running on port 5000.");
   } finally {
     if (timer) clearTimeout(timer);
+  }
+
+  // ── 401 auto-retry with force-refreshed token (runs at most once) ──────────
+  if (res.status === 401 && !forceRefresh) {
+    return _doRequest<T>(path, init, timeoutMs, /* forceRefresh= */ true);
   }
 
   if (!res.ok) {

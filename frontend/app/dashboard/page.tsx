@@ -7,12 +7,9 @@ import { ScoreCircle } from "@/components/dashboard/ScoreCircle";
 import { GithubPulseCard } from "@/components/dashboard/GithubPulseCard";
 import { LeetcodeMasteryCard } from "@/components/dashboard/LeetcodeMasteryCard";
 import { SkillRadar } from "@/components/dashboard/SkillRadar";
-import { TopRepositoriesCard } from "@/components/dashboard/TopRepositoriesCard";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { motion } from "framer-motion";
-import { Loader2, Github, Code2, Cpu, SlidersHorizontal, GitBranch } from "lucide-react";
+import { Github, Code2, Cpu } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 // ----- Animation Variants -----
 const fadeUp = {
@@ -77,16 +74,118 @@ function SectionHeader({
   );
 }
 
-// ----- Loading skeleton -----
-function DashboardSkeleton() {
+// ----- Circular progress with label (mirrors MUI CircularProgressWithLabel) -----
+function CircularProgressWithLabel({ value, size = 100, strokeWidth = 8 }: {
+  value: number;
+  size?: number;
+  strokeWidth?: number;
+}) {
+  const r = (size - strokeWidth) / 2;
+  const circ = 2 * Math.PI * r;
+  const offset = circ - (value / 100) * circ;
   return (
-    <div className="min-h-screen bg-[#0B1120] flex items-center justify-center">
-      <div className="space-y-4 w-full max-w-md p-8">
-        <Skeleton className="h-16 w-16 rounded-full bg-slate-800" />
-        <Skeleton className="h-4 w-56 bg-slate-800" />
-        <Skeleton className="h-4 w-40 bg-slate-800" />
-        <Skeleton className="h-4 w-48 bg-slate-800" />
+    <div style={{ position: "relative", display: "inline-flex", width: size, height: size }}>
+      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+        {/* track */}
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#1e293b" strokeWidth={strokeWidth} />
+        {/* progress arc */}
+        <circle
+          cx={size / 2} cy={size / 2} r={r}
+          fill="none"
+          stroke="url(#lcGrad)"
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeDasharray={circ}
+          strokeDashoffset={offset}
+          style={{ transition: "stroke-dashoffset 0.5s ease" }}
+        />
+        <defs>
+          <linearGradient id="lcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#22d3ee" />
+            <stop offset="100%" stopColor="#3b82f6" />
+          </linearGradient>
+        </defs>
+      </svg>
+      <span style={{
+        position: "absolute", inset: 0,
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+        <span className="text-cyan-300 font-black font-mono" style={{ fontSize: size * 0.18 }}>
+          {Math.round(value)}%
+        </span>
+      </span>
+    </div>
+  );
+}
+
+// ----- Loading screen (driven by real loadingStep data from VM) -----
+const STEP_THRESHOLDS = [30, 60, 85, 100] as const;
+const STEP_ACTIVE_AT  = [5,  30, 60, 85]  as const;
+const STEP_NAMES      = ["Authenticating", "Connecting", "Profile", "Analytics"] as const;
+
+function DashboardSkeleton({ pct, label }: { pct: number; label: string }) {
+  return (
+    <div className="min-h-screen bg-[#0B1120] flex flex-col items-center justify-center gap-8">
+      {/* Glowing ring backdrop */}
+      <div className="relative">
+        <div className="absolute inset-0 rounded-full blur-2xl opacity-20 bg-cyan-500 scale-150" />
+        <div className="flex flex-col items-center gap-4">
+          <CircularProgressWithLabel value={pct} size={120} strokeWidth={10} />
+          <p className="text-slate-300 text-sm font-semibold tracking-wide">{label}</p>
+        </div>
       </div>
+      {/* Step progress track */}
+      <div className="w-64 space-y-2">
+        {STEP_NAMES.map((name, i) => {
+          const done   = pct >= STEP_THRESHOLDS[i];
+          const active = !done && pct >= STEP_ACTIVE_AT[i];
+          return (
+            <div key={name} className="flex items-center gap-3">
+              <span className={`h-2 w-2 rounded-full shrink-0 transition-colors duration-500 ${
+                done ? "bg-cyan-400" : active ? "bg-cyan-500 animate-pulse" : "bg-slate-700"
+              }`} />
+              <span className={`text-xs transition-colors duration-500 ${
+                done ? "text-slate-400 line-through" : active ? "text-slate-200 font-medium" : "text-slate-600"
+              }`}>{name}</span>
+              {done && <span className="text-cyan-500 text-[10px] ml-auto">✓</span>}
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-slate-600 text-xs max-w-xs text-center">
+        Please wait — page will appear automatically once loading reaches 100%.
+      </p>
+    </div>
+  );
+}
+
+// ----- Fatal load-error screen (shown when startup API calls fail) -----
+function DashboardErrorScreen({ message, onRetry }: { message: string; onRetry: () => void }) {
+  const is401 = message.includes("401") || message.toLowerCase().includes("unauthorized");
+  return (
+    <div className="min-h-screen bg-[#0B1120] flex flex-col items-center justify-center gap-6 px-6">
+      <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center text-3xl">
+        {is401 ? "🔒" : "⚠️"}
+      </div>
+      <div className="text-center space-y-2 max-w-sm">
+        <h2 className="text-white font-bold text-lg">
+          {is401 ? "Session expired" : "Could not load dashboard"}
+        </h2>
+        <p className="text-slate-400 text-sm">
+          {is401
+            ? "Your session token isn't ready yet. Click \"Try again\" below — it usually resolves in one retry."
+            : "Something went wrong while loading your profile. Please try again."}
+        </p>
+        <p className="text-slate-600 text-xs font-mono bg-slate-900 rounded-lg px-3 py-2 mt-1 break-all">
+          {message}
+        </p>
+      </div>
+      <button
+        onClick={onRetry}
+        className="mt-2 px-8 py-3 rounded-xl bg-linear-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-sm font-semibold shadow-lg shadow-cyan-500/20 transition-all duration-200 active:scale-95"
+      >
+        Try again
+      </button>
     </div>
   );
 }
@@ -96,18 +195,23 @@ export default function DashboardPage() {
   const {
     userProfile,
     analytics,
-    loading,
-    analyzing,
-    error,
-    githubUsername, setGithubUsername,
-    leetcodeUsername, setLeetcodeUsername,
-    cgpa, setCgpa,
-    batch, setBatch,
-    updateProfile,
+    loadingStep,
+    loadError,
+    retryLoad,
+    loadingPct,
+    loadingLabel,
     handleLogout,
   } = useDashboardViewModel();
 
-  if (loading) return <DashboardSkeleton />;
+  const router = useRouter();
+
+  // Show error screen for any fatal startup failure (401, network, etc.)
+  // Page stays gated — the user never sees a blank/broken dashboard.
+  if (loadError) return <DashboardErrorScreen message={loadError} onRetry={retryLoad} />;
+
+  // Hold the page until loadingStep reaches 4 (all API calls returned 200).
+  // 0 = waiting for auth · 1 = profile · 2 = analytics · 3 = applying · 4 = done
+  if (loadingStep < 4) return <DashboardSkeleton pct={loadingPct} label={loadingLabel} />;
 
   const totalLeet =
     (analytics?.leetcode_easy ?? 0) +
@@ -172,28 +276,61 @@ export default function DashboardPage() {
                   🐙 {analytics?.github_totalRepos ?? userProfile?.githubRepoCount ?? 0} GitHub Repos
                 </span>
               </motion.div>
+              {/* Update Profile CTA */}
+              <motion.button
+                variants={fadeUp}
+                onClick={() => router.push("/dashboard/settings")}
+                className="mt-5 self-start flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20 hover:bg-cyan-500/20 hover:border-cyan-500/40 text-cyan-300 text-xs font-semibold transition-all duration-200 group"
+              >
+                <span>⚡ Update Profile &amp; Score</span>
+                <span className="text-cyan-600 group-hover:translate-x-0.5 transition-transform duration-200">→</span>
+              </motion.button>
             </div>
           </div>
         </DarkCard>
 
-        {/* SECTION 2 + 3 — GITHUB + LEETCODE */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <DarkCard glowColor="shadow-[0_0_40px_rgba(34,211,238,0.06)]" className="p-6">
-            <div className="absolute top-0 left-0 right-0 h-0.5 bg-linear-to-r from-cyan-500 to-blue-500 rounded-t-2xl" />
-            <SectionHeader
-              icon={<Github size={16} />}
-              title="GitHub Pulse"
-              subtitle="Repository activity & language distribution"
-              iconColor="text-cyan-400"
-              iconBg="bg-cyan-500/10"
-            />
-            <GithubPulseCard
-              totalRepos={analytics?.github_totalRepos ?? userProfile?.githubRepoCount ?? 0}
-              totalStars={analytics?.github_totalStars ?? 0}
-              languageDistribution={analytics?.github_languageDistribution ?? {}}
-            />
-          </DarkCard>
+        {/* SECTION 2 — GITHUB + LEETCODE + SKILL INSIGHTS */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
 
+          {/* LEFT: GitHub Pulse + Skill Insights stacked */}
+          <div className="flex flex-col gap-6">
+            <DarkCard glowColor="shadow-[0_0_40px_rgba(34,211,238,0.06)]" className="p-6">
+              <div className="absolute top-0 left-0 right-0 h-0.5 bg-linear-to-r from-cyan-500 to-blue-500 rounded-t-2xl" />
+              <SectionHeader
+                icon={<Github size={16} />}
+                title="GitHub Pulse"
+                subtitle="Repository activity & language distribution"
+                iconColor="text-cyan-400"
+                iconBg="bg-cyan-500/10"
+              />
+              <GithubPulseCard
+                totalRepos={analytics?.github_totalRepos ?? userProfile?.githubRepoCount ?? 0}
+                totalStars={analytics?.github_totalStars ?? 0}
+                languageDistribution={analytics?.github_languageDistribution ?? {}}
+                repositories={analytics?.topRepositories ?? []}
+              />
+            </DarkCard>
+
+            <DarkCard glowColor="shadow-[0_0_40px_rgba(124,58,237,0.07)]" className="p-6 flex-1">
+              <div className="absolute top-0 left-0 right-0 h-0.5 bg-linear-to-r from-violet-500 to-indigo-500 rounded-t-2xl" />
+              <SectionHeader
+                icon={<Cpu size={16} />}
+                title="Skill Insights"
+                subtitle="Normalised balance index"
+                iconColor="text-violet-400"
+                iconBg="bg-violet-500/10"
+              />
+              <SkillRadar
+                easy={analytics?.leetcode_easy ?? 0}
+                medium={analytics?.leetcode_medium ?? 0}
+                hard={analytics?.leetcode_hard ?? userProfile?.leetcodeHardCount ?? 0}
+                repos={analytics?.github_totalRepos ?? userProfile?.githubRepoCount ?? 0}
+                cgpa={userProfile?.cgpa ?? 0}
+              />
+            </DarkCard>
+          </div>
+
+          {/* RIGHT: LeetCode Mastery — full height */}
           <DarkCard glowColor="shadow-[0_0_40px_rgba(251,146,60,0.06)]" className="p-6">
             <div className="absolute top-0 left-0 right-0 h-0.5 bg-linear-to-r from-orange-500 to-yellow-400 rounded-t-2xl" />
             <SectionHeader
@@ -209,177 +346,6 @@ export default function DashboardPage() {
               hard={analytics?.leetcode_hard ?? userProfile?.leetcodeHardCount ?? 0}
               deepStats={analytics?.leetcode}
             />
-          </DarkCard>
-        </div>
-
-        {/* SECTION 4 — TOP REPOSITORIES + SKILL RADAR */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <DarkCard glowColor="shadow-[0_0_40px_rgba(6,182,212,0.07)]" className="p-6 lg:col-span-2">
-            {/* Animated gradient top-border */}
-            <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-2xl overflow-hidden">
-              <motion.div
-                className="h-full w-full bg-linear-to-r from-cyan-500 via-violet-500 to-orange-500"
-                animate={{ backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"] }}
-                transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
-              />
-            </div>
-            <SectionHeader
-              icon={<GitBranch size={16} />}
-              title="Top Repositories"
-              subtitle="Sorted by stargazers · sourced live from GitHub"
-              iconColor="text-cyan-400"
-              iconBg="bg-cyan-500/10"
-            />
-            <TopRepositoriesCard repositories={analytics?.topRepositories ?? []} />
-          </DarkCard>
-
-          <DarkCard glowColor="shadow-[0_0_40px_rgba(124,58,237,0.07)]" className="p-6 lg:col-span-1">
-            <div className="absolute top-0 left-0 right-0 h-0.5 bg-linear-to-r from-violet-500 to-indigo-500 rounded-t-2xl" />
-            <SectionHeader
-              icon={<Cpu size={16} />}
-              title="Skill Insights"
-              subtitle="Normalised balance index"
-              iconColor="text-violet-400"
-              iconBg="bg-violet-500/10"
-            />
-            <SkillRadar
-              easy={analytics?.leetcode_easy ?? 0}
-              medium={analytics?.leetcode_medium ?? 0}
-              hard={analytics?.leetcode_hard ?? userProfile?.leetcodeHardCount ?? 0}
-              repos={analytics?.github_totalRepos ?? userProfile?.githubRepoCount ?? 0}
-              cgpa={userProfile?.cgpa ?? 0}
-            />
-          </DarkCard>
-        </div>
-
-        {/* SECTION 5 — UPDATE PROFILE */}
-        <div>
-          <DarkCard className="p-6">
-            <div className="absolute top-0 left-0 right-0 h-0.5 bg-linear-to-r from-slate-600 to-slate-700 rounded-t-2xl" />
-            <SectionHeader
-              icon={<SlidersHorizontal size={16} />}
-              title="Update Profile"
-              subtitle="Recalculate your score with new data"
-              iconColor="text-slate-300"
-              iconBg="bg-slate-700/60"
-            />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Batch</label>
-                <Input
-                  value={batch}
-                  onChange={(e) => setBatch(e.target.value)}
-                  type="text"
-                  className="bg-[#0B1120] border-slate-700 text-slate-100 placeholder:text-slate-600 rounded-xl"
-                  placeholder="e.g. 2022-2026"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">CGPA</label>
-                <Input
-                  value={cgpa}
-                  onChange={(e) => setCgpa(e.target.value)}
-                  type="number"
-                  step="0.01"
-                  className="bg-[#0B1120] border-slate-700 text-slate-100 placeholder:text-slate-600 rounded-xl"
-                  placeholder="e.g. 8.5"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">GitHub Username</label>
-                <Input
-                  value={githubUsername}
-                  onChange={(e) => setGithubUsername(e.target.value)}
-                  className="bg-[#0B1120] border-slate-700 text-slate-100 placeholder:text-slate-600 rounded-xl"
-                  placeholder="username"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">LeetCode Username</label>
-                <Input
-                  value={leetcodeUsername}
-                  onChange={(e) => setLeetcodeUsername(e.target.value)}
-                  className="bg-[#0B1120] border-slate-700 text-slate-100 placeholder:text-slate-600 rounded-xl"
-                  placeholder="username"
-                />
-              </div>
-            </div>
-
-            {error && (
-              <motion.div
-                initial={{ opacity: 0, y: -6 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mt-5 rounded-xl border px-4 py-3.5 text-sm flex items-start gap-3
-                  bg-red-500/8 border-red-500/30 text-red-300"
-              >
-                <span className="text-base shrink-0 mt-0.5">
-                  {error.toLowerCase().includes("timeout") || error.toLowerCase().includes("timed out")
-                    ? "⏱️" : error.toLowerCase().includes("cannot reach") || error.includes("502") || error.includes("503")
-                    ? "🔌" : error.includes("401") || error.includes("403")
-                    ? "🔒" : "⚠️"}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-red-200 mb-0.5">
-                    {error.toLowerCase().includes("timeout") || error.toLowerCase().includes("timed out")
-                      ? "Analysis timed out"
-                      : error.toLowerCase().includes("cannot reach") || error.includes("502") || error.includes("503")
-                      ? "Backend unreachable"
-                      : error.includes("401") || error.includes("403")
-                      ? "Session expired"
-                      : "Analysis failed"}
-                  </p>
-                  <p className="text-red-400 text-xs leading-relaxed wrap-break-word">{error}</p>
-                  {(error.toLowerCase().includes("timeout") || error.toLowerCase().includes("timed out")) && (
-                    <p className="text-slate-500 text-xs mt-1.5">
-                      LeetCode detail fetches are throttled to avoid rate-limiting. Try again — it should complete within 60–90 s.
-                    </p>
-                  )}
-                  {error.toLowerCase().includes("cannot reach") && (
-                    <p className="text-slate-500 text-xs mt-1.5">
-                      Make sure the backend is running: <code className="text-slate-400 bg-slate-800 px-1 rounded">uvicorn main:app --reload --port 5000</code>
-                    </p>
-                  )}
-                </div>
-                <button
-                  onClick={updateProfile}
-                  className="text-xs text-red-400 hover:text-red-200 border border-red-500/30 hover:border-red-400/50 rounded-lg px-2.5 py-1 shrink-0 transition"
-                >
-                  Retry
-                </button>
-              </motion.div>
-            )}
-
-            <Button
-              onClick={updateProfile}
-              disabled={analyzing}
-              className="w-full mt-5 bg-linear-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold rounded-xl h-11 shadow-lg shadow-cyan-500/20 transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {analyzing ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Analyzing Your Profile...
-                </>
-              ) : (
-                "⚡ Analyze & Update Score"
-              )}
-            </Button>
-
-            {analyzing && (
-              <div className="mt-3 flex gap-2 flex-wrap">
-                {["Fetching GitHub", "Fetching LeetCode", "Calculating Score", "Saving Results"].map((step, i) => (
-                  <motion.span
-                    key={step}
-                    initial={{ opacity: 0, scale: 0.85 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: i * 0.3 }}
-                    className="text-xs bg-slate-800 border border-slate-700 rounded-full px-3 py-1 text-slate-400"
-                  >
-                    <Loader2 className="inline mr-1 h-2.5 w-2.5 animate-spin" />
-                    {step}
-                  </motion.span>
-                ))}
-              </div>
-            )}
           </DarkCard>
         </div>
 
