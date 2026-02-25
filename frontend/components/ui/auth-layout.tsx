@@ -16,17 +16,19 @@ interface AuthLayoutProps {
 export default function AuthLayout({ children }: AuthLayoutProps) {
   return (
     <div className="relative min-h-screen flex items-center justify-center overflow-x-hidden px-4 py-12">
-      {/* Animated WebGL background — fixed behind everything */}
-      <ShaderBackground />
+      {/* Fixed container at z-0 sits ABOVE the body background — canvas fills it absolutely */}
+      <div className="fixed inset-0 z-0" aria-hidden="true">
+        <ShaderBackground />
+      </div>
 
-      {/* Semi-transparent overlay to tone down the shader for readability */}
+      {/* Subtle dark overlay for form readability */}
       <div
-        className="fixed inset-0 z-0 bg-black/40 pointer-events-none"
+        className="fixed inset-0 z-[1] bg-black/40 pointer-events-none"
         aria-hidden="true"
       />
 
-      {/* Content — sits above canvas & overlay */}
-      <div className="relative z-10 w-full max-w-md">
+      {/* Content — above both canvas and overlay */}
+      <div className="relative z-[2] w-full max-w-md">
         {children}
       </div>
     </div>
