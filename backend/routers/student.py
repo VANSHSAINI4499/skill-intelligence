@@ -21,7 +21,15 @@ from typing import Optional
 from config.firebase import db
 from core.auth_middleware import CurrentUser, get_current_student
 from core.ranking_engine import calculate_grade, calculate_score, load_weights
-from models.student_model import AnalyzeStudentRequest, AnalyzeStudentResponse, AnalyticsData
+from models.student_model import (
+    AnalyzeStudentRequest,
+    AnalyzeStudentResponse,
+    AnalyticsData,
+    LeetCodeDeepStats,
+    LeetCodeDifficulty,
+    RecentSubmission,
+    TopRepository,
+)
 from services.github_service import fetch_github_stats
 from services.leetcode_service import fetch_leetcode_stats
 
@@ -116,6 +124,71 @@ async def get_profile(
         githubRepoCount  = int(data.get("githubRepoCount",   0)),
         leetcodeHardCount= int(data.get("leetcodeHardCount", 0)),
         isActive         = bool(data.get("isActive", True)),
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GET /student/analytics
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get(
+    "/analytics",
+    response_model=AnalyticsData,
+    summary="Get own stored analytics (populated after first Analyze)",
+)
+async def get_analytics(
+    user: CurrentUser = Depends(get_current_student),
+) -> AnalyticsData:
+    """
+    Reads the analytics document from
+    universities/{university_id}/analytics/{uid}
+    and returns it as AnalyticsData so the dashboard can restore deep
+    LeetCode stats (languageStats, topicTags, recentSubmissions) on page load.
+    Returns an empty AnalyticsData if the document does not exist yet.
+    """
+    doc = _analytics_ref(user.university_id, user.uid).get()
+    if not doc.exists:
+        return AnalyticsData()
+
+    data = doc.to_dict() or {}
+
+    # ── Reconstruct topRepositories ──────────────────────────────────────────
+    top_repos = [
+        TopRepository(**r)
+        for r in (data.get("topRepositories") or [])
+        if isinstance(r, dict)
+    ]
+
+    # ── Reconstruct LeetCodeDeepStats ────────────────────────────────────────
+    lc_raw = data.get("leetcode") or {}
+    diff_raw = lc_raw.get("difficulty") or {}
+    recent_raw = lc_raw.get("recentSubmissions") or []
+    recent_subs = [
+        RecentSubmission(**s)
+        for s in recent_raw
+        if isinstance(s, dict)
+    ]
+    leetcode_deep = LeetCodeDeepStats(
+        totalSolved=int(lc_raw.get("totalSolved", 0)),
+        difficulty=LeetCodeDifficulty(
+            easy=int(diff_raw.get("easy", 0)),
+            medium=int(diff_raw.get("medium", 0)),
+            hard=int(diff_raw.get("hard", 0)),
+        ),
+        languageStats=dict(lc_raw.get("languageStats") or {}),
+        topicTags=dict(lc_raw.get("topicTags") or {}),
+        recentSubmissions=recent_subs,
+    )
+
+    return AnalyticsData(
+        github_totalRepos=int(data.get("github_totalRepos", 0)),
+        github_totalStars=int(data.get("github_totalStars", 0)),
+        github_languageDistribution=dict(data.get("github_languageDistribution") or {}),
+        topRepositories=top_repos,
+        leetcode_easy=int(data.get("leetcode_easy", 0)),
+        leetcode_medium=int(data.get("leetcode_medium", 0)),
+        leetcode_hard=int(data.get("leetcode_hard", 0)),
+        leetcode=leetcode_deep,
     )
 
 

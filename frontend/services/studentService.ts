@@ -47,6 +47,11 @@ export const studentService = {
     return apiRequest<UserProfile>("/student/profile");
   },
 
+  /** GET /api/student/analytics — restore stored deep stats on page load */
+  async getAnalytics(): Promise<AnalyticsData> {
+    return apiRequest<AnalyticsData>("/student/analytics");
+  },
+
   /** PUT /api/student/profile — partial update */
   async updateProfile(update: StudentProfileUpdate): Promise<UserProfile> {
     return apiRequest<UserProfile>("/student/profile", {

@@ -24,15 +24,24 @@ export function useDashboardViewModel() {
   const [branch, setBranch] = useState<string>('');
 
   const loadUserData = async () => {
-    // Only profile on initial load — analytics are populated after running analyze
-    const profile = await studentService.getProfile();
-    if (profile) {
-      setUserProfile(profile);
-      setGithubUsername(profile.githubUsername || '');
-      setLeetcodeUsername(profile.leetcodeUsername || '');
-      setCgpa(profile.cgpa?.toString() || '');
-      setBatch(profile.batch || '');
-      setBranch(profile.branch || '');
+    // Load profile and analytics in parallel so deep LeetCode stats
+    // (languageStats, topicTags, recentSubmissions) are visible on every page load.
+    const [profile, savedAnalytics] = await Promise.allSettled([
+      studentService.getProfile(),
+      studentService.getAnalytics(),
+    ]);
+
+    if (profile.status === "fulfilled" && profile.value) {
+      setUserProfile(profile.value);
+      setGithubUsername(profile.value.githubUsername || '');
+      setLeetcodeUsername(profile.value.leetcodeUsername || '');
+      setCgpa(profile.value.cgpa?.toString() || '');
+      setBatch(profile.value.batch || '');
+      setBranch(profile.value.branch || '');
+    }
+
+    if (savedAnalytics.status === "fulfilled" && savedAnalytics.value) {
+      setAnalytics(savedAnalytics.value);
     }
   };
 
