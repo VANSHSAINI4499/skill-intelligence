@@ -59,11 +59,15 @@ export const studentService = {
    * POST /api/student/analyze
    * Fetches fresh GitHub + LeetCode data, recalculates the score,
    * writes analytics to Firestore, and returns the results.
+   *
+   * Timeout is 90 s because LeetCode detail fetches are throttled
+   * (3 concurrent, 150–500 ms jitter per batch → ~20–40 s expected).
    */
   async analyze(payload: StudentAnalyzePayload): Promise<StudentAnalyzeResponse> {
-    return apiRequest<StudentAnalyzeResponse>("/student/analyze", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
+    return apiRequest<StudentAnalyzeResponse>(
+      "/student/analyze",
+      { method: "POST", body: JSON.stringify(payload) },
+      90_000,   // 90 second timeout
+    );
   },
 };

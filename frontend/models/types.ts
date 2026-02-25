@@ -11,6 +11,8 @@ export interface UserProfile {
   name: string;
   email: string;
   role: "student" | "admin";
+  universityId?: string | null;
+  universityName?: string | null;  // fetched from universities doc on profile load
   batch?: string | null;           // "YYYY-YYYY"
   branch?: string | null;
   cgpa?: number | null;

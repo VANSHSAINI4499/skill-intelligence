@@ -24,10 +24,8 @@ export function useDashboardViewModel() {
   const [branch, setBranch] = useState<string>('');
 
   const loadUserData = async () => {
-    const [profile, analyticsData] = await Promise.all([
-      studentService.getProfile(),
-      firebaseService.getUserAnalytics(user!.uid),
-    ]);
+    // Only profile on initial load — analytics are populated after running analyze
+    const profile = await studentService.getProfile();
     if (profile) {
       setUserProfile(profile);
       setGithubUsername(profile.githubUsername || '');
@@ -36,7 +34,6 @@ export function useDashboardViewModel() {
       setBatch(profile.batch || '');
       setBranch(profile.branch || '');
     }
-    if (analyticsData) setAnalytics(analyticsData);
   };
 
   useEffect(() => {
@@ -83,8 +80,13 @@ export function useDashboardViewModel() {
       );
       setAnalytics(result.analytics);
 
-    } catch (err: any) {
-      setError(err.message || "Failed to update profile");
+    } catch (err: unknown) {
+      // Show the most useful part of the error to the user
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("An unexpected error occurred. Please try again.");
+      }
     } finally {
       setAnalyzing(false);
     }

@@ -102,7 +102,7 @@ export default function DashboardPage() {
     githubUsername, setGithubUsername,
     leetcodeUsername, setLeetcodeUsername,
     cgpa, setCgpa,
-    semester, setSemester,
+    batch, setBatch,
     updateProfile,
     handleLogout,
   } = useDashboardViewModel();
@@ -151,11 +151,19 @@ export default function DashboardPage() {
                 Keep solving, keep building.
               </motion.p>
               <motion.div variants={fadeUp} className="flex flex-wrap gap-3 mt-5 justify-center md:justify-start">
+                {userProfile?.universityName && (
+                  <span className="bg-blue-500/10 border border-blue-500/20 rounded-full px-4 py-1.5 text-xs text-blue-300 font-medium">
+                    🏫 {userProfile.universityName}
+                  </span>
+                )}
                 <span className="bg-slate-800/80 border border-slate-700/50 rounded-full px-4 py-1.5 text-xs text-slate-300 font-medium">
-                  📚 Sem {userProfile?.semester ?? "—"}
+                  🎓 {userProfile?.batch ?? "—"}
                 </span>
                 <span className="bg-slate-800/80 border border-slate-700/50 rounded-full px-4 py-1.5 text-xs text-slate-300 font-medium">
-                  🎓 CGPA {userProfile?.cgpa ?? "—"}
+                  🌿 {userProfile?.branch ?? "—"}
+                </span>
+                <span className="bg-slate-800/80 border border-slate-700/50 rounded-full px-4 py-1.5 text-xs text-slate-300 font-medium">
+                  📊 CGPA {userProfile?.cgpa ?? "—"}
                 </span>
                 <span className="bg-slate-800/80 border border-slate-700/50 rounded-full px-4 py-1.5 text-xs text-slate-300 font-medium">
                   💻 {totalLeet} LeetCode Solved
@@ -210,7 +218,7 @@ export default function DashboardPage() {
             {/* Animated gradient top-border */}
             <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-2xl overflow-hidden">
               <motion.div
-                className="h-full w-full bg-gradient-to-r from-cyan-500 via-violet-500 to-orange-500"
+                className="h-full w-full bg-linear-to-r from-cyan-500 via-violet-500 to-orange-500"
                 animate={{ backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"] }}
                 transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
               />
@@ -226,7 +234,7 @@ export default function DashboardPage() {
           </DarkCard>
 
           <DarkCard glowColor="shadow-[0_0_40px_rgba(124,58,237,0.07)]" className="p-6 lg:col-span-1">
-            <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-violet-500 to-indigo-500 rounded-t-2xl" />
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-linear-to-r from-violet-500 to-indigo-500 rounded-t-2xl" />
             <SectionHeader
               icon={<Cpu size={16} />}
               title="Skill Insights"
@@ -257,13 +265,13 @@ export default function DashboardPage() {
             />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Semester</label>
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Batch</label>
                 <Input
-                  value={semester}
-                  onChange={(e) => setSemester(e.target.value)}
-                  type="number"
+                  value={batch}
+                  onChange={(e) => setBatch(e.target.value)}
+                  type="text"
                   className="bg-[#0B1120] border-slate-700 text-slate-100 placeholder:text-slate-600 rounded-xl"
-                  placeholder="e.g. 3"
+                  placeholder="e.g. 2022-2026"
                 />
               </div>
               <div className="space-y-1.5">
@@ -298,9 +306,47 @@ export default function DashboardPage() {
             </div>
 
             {error && (
-              <div className="mb-4 rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-400">
-                ⚠️ {error}
-              </div>
+              <motion.div
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-5 rounded-xl border px-4 py-3.5 text-sm flex items-start gap-3
+                  bg-red-500/8 border-red-500/30 text-red-300"
+              >
+                <span className="text-base shrink-0 mt-0.5">
+                  {error.toLowerCase().includes("timeout") || error.toLowerCase().includes("timed out")
+                    ? "⏱️" : error.toLowerCase().includes("cannot reach") || error.includes("502") || error.includes("503")
+                    ? "🔌" : error.includes("401") || error.includes("403")
+                    ? "🔒" : "⚠️"}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-red-200 mb-0.5">
+                    {error.toLowerCase().includes("timeout") || error.toLowerCase().includes("timed out")
+                      ? "Analysis timed out"
+                      : error.toLowerCase().includes("cannot reach") || error.includes("502") || error.includes("503")
+                      ? "Backend unreachable"
+                      : error.includes("401") || error.includes("403")
+                      ? "Session expired"
+                      : "Analysis failed"}
+                  </p>
+                  <p className="text-red-400 text-xs leading-relaxed wrap-break-word">{error}</p>
+                  {(error.toLowerCase().includes("timeout") || error.toLowerCase().includes("timed out")) && (
+                    <p className="text-slate-500 text-xs mt-1.5">
+                      LeetCode detail fetches are throttled to avoid rate-limiting. Try again — it should complete within 60–90 s.
+                    </p>
+                  )}
+                  {error.toLowerCase().includes("cannot reach") && (
+                    <p className="text-slate-500 text-xs mt-1.5">
+                      Make sure the backend is running: <code className="text-slate-400 bg-slate-800 px-1 rounded">uvicorn main:app --reload --port 5000</code>
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={updateProfile}
+                  className="text-xs text-red-400 hover:text-red-200 border border-red-500/30 hover:border-red-400/50 rounded-lg px-2.5 py-1 shrink-0 transition"
+                >
+                  Retry
+                </button>
+              </motion.div>
             )}
 
             <Button
@@ -320,7 +366,7 @@ export default function DashboardPage() {
 
             {analyzing && (
               <div className="mt-3 flex gap-2 flex-wrap">
-                {["Fetching GitHub", "Fetching LeetCode", "Calculating Score", "Updating Firestore"].map((step, i) => (
+                {["Fetching GitHub", "Fetching LeetCode", "Calculating Score", "Saving Results"].map((step, i) => (
                   <motion.span
                     key={step}
                     initial={{ opacity: 0, scale: 0.85 }}

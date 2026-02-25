@@ -74,6 +74,7 @@ class StudentProfileResponse(BaseModel):
     leetcodeHardCount:int             = 0
     isActive:         bool            = True
     universityId:     Optional[str]   = None
+    universityName:   Optional[str]   = None  # fetched from universities doc
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -93,9 +94,15 @@ async def get_profile(
         raise HTTPException(status_code=404, detail="Student profile not found")
 
     data = doc.to_dict()
+
+    # Fetch university name from the parent university doc
+    uni_doc = db.collection("universities").document(user.university_id).get()
+    university_name = uni_doc.to_dict().get("name") if uni_doc.exists else None
+
     return StudentProfileResponse(
         uid              = user.uid,
         universityId     = user.university_id,
+        universityName   = university_name,
         name             = data.get("name"),
         email            = data.get("email"),
         role             = data.get("role", "student"),

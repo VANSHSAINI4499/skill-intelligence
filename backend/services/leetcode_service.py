@@ -1,20 +1,20 @@
 """
 LeetCode GraphQL API client.
 
-Pipeline (single profile query + concurrent question-detail queries):
-  1. Fetch submitStatsGlobal  → easy / medium / hard totals
-  2. Fetch languageProblemCount → all-time language stats
-  3. Fetch tagProblemCounts   → all-time topic tags (3 tiers merged)
-  4. Fetch recentAcSubmissionList (limit 20) → title, titleSlug, lang, timestamp
-  5. For each unique titleSlug — concurrently fetch question detail
-       → topicTags list + difficulty string
-  6. Aggregate from recent subs:
-       - recent_languageStats  (freq of lang across last 20)
-       - recent_topicTags      (freq of tag  across last 20)
-       - most_used_language    (argmax of recent_languageStats)
+Pipeline:
+  1. Fetch submitStatsGlobal      → easy / medium / hard totals  (public ✓)
+  2. Fetch languageProblemCount   → all-time lang stats           (public ✓, fallback to recent)
+  3. Fetch recentAcSubmissionList → last 20 accepted submissions  (public ✓)
+  4. Aggregate language stats from submission `lang` field        (no extra request)
+  5. Throttled detail fetches per unique slug (max 3 concurrent)
+       → topicTags + difficulty                                   (public ✓)
+
+NOTE: `tagProblemCounts` intentionally removed — requires LeetCode session
+      cookies and returns null for unauthenticated requests.
 """
 
 import asyncio
+import random
 import traceback
 from collections import Counter
 
@@ -28,15 +28,26 @@ from models.student_model import (
     RecentSubmission,
 )
 
+# Semaphore: max 3 concurrent detail requests to avoid rate-limiting
+_DETAIL_SEMAPHORE = asyncio.Semaphore(3)
+
 _HEADERS = {
-    "Content-Type": "application/json",
-    "Referer":      "https://leetcode.com",
-    "User-Agent":   "Mozilla/5.0",
+    "Content-Type":    "application/json",
+    "Referer":         "https://leetcode.com",
+    "Origin":          "https://leetcode.com",
+    "User-Agent":      (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/122.0.0.0 Safari/537.36"
+    ),
+    "Accept":          "application/json",
+    "Accept-Language": "en-US,en;q=0.9",
 }
 
-# ── Query 1: full profile in one shot ───────────────────────────────────────
+# ── Query 1: public profile data (no auth-required fields) ──────────────────
+# tagProblemCounts intentionally omitted — requires session cookies.
 _PROFILE_QUERY = """
-query getFullProfile($username: String!) {
+query getPublicProfile($username: String!) {
   matchedUser(username: $username) {
     submitStatsGlobal {
       acSubmissionNum { difficulty count }
@@ -44,11 +55,6 @@ query getFullProfile($username: String!) {
     languageProblemCount {
       languageName
       problemsSolved
-    }
-    tagProblemCounts {
-      advanced     { tagName problemsSolved }
-      intermediate { tagName problemsSolved }
-      fundamental  { tagName problemsSolved }
     }
   }
   recentAcSubmissionList(username: $username, limit: 20) {
@@ -77,43 +83,43 @@ async def _fetch_question_detail(
 ) -> tuple[str, str, list[str]]:
     """
     Returns (titleSlug, difficulty, [tag_names]).
-    Silently degrades to empty values on any error.
+    Throttled via semaphore + random jitter. Silently degrades on any error.
     """
-    try:
-        resp = await client.post(
-            settings.LEETCODE_GRAPHQL_URL,
-            json={"query": _QUESTION_DETAIL_QUERY, "variables": {"titleSlug": title_slug}},
-            headers=_HEADERS,
-        )
-        if resp.status_code != 200:
-            print(f"[LeetCode]   ⚠ detail fetch failed for '{title_slug}': HTTP {resp.status_code}")
+    async with _DETAIL_SEMAPHORE:
+        # Random jitter 150 – 500 ms between requests to avoid burst rate-limiting
+        await asyncio.sleep(random.uniform(0.15, 0.5))
+        try:
+            resp = await client.post(
+                settings.LEETCODE_GRAPHQL_URL,
+                json={"query": _QUESTION_DETAIL_QUERY, "variables": {"titleSlug": title_slug}},
+                timeout=12,
+            )
+            if resp.status_code != 200:
+                print(f"[LeetCode]   ⚠ detail '{title_slug}': HTTP {resp.status_code}")
+                return title_slug, "", []
+
+            q = resp.json().get("data", {}).get("question") or {}
+            difficulty = q.get("difficulty", "")
+            tags = [t["name"] for t in (q.get("topicTags") or []) if t.get("name")]
+            return title_slug, difficulty, tags
+
+        except Exception as exc:
+            print(f"[LeetCode]   ⚠ detail exception '{title_slug}': {exc}")
             return title_slug, "", []
-
-        q = resp.json().get("data", {}).get("question") or {}
-        difficulty = q.get("difficulty", "")
-        tags = [t["name"] for t in (q.get("topicTags") or []) if t.get("name")]
-        return title_slug, difficulty, tags
-
-    except Exception as exc:
-        print(f"[LeetCode]   ⚠ detail exception for '{title_slug}': {exc}")
-        return title_slug, "", []
 
 
 async def fetch_leetcode_stats(username: str) -> LeetCodeStats:
-    print(f"[LeetCode] ► Fetching full stats for username='{username}'")
-    print(f"[LeetCode]   POST {settings.LEETCODE_GRAPHQL_URL}")
+    print(f"[LeetCode] ► Fetching stats for username='{username}'")
 
     try:
-        async with httpx.AsyncClient(timeout=20) as client:
-
-            # ── Step 1: profile query ──────────────────────────────────────────
+        # ── Step 1: single profile request ───────────────────────────────────
+        async with httpx.AsyncClient(timeout=20, headers=_HEADERS) as client:
             profile_resp = await client.post(
                 settings.LEETCODE_GRAPHQL_URL,
                 json={"query": _PROFILE_QUERY, "variables": {"username": username}},
-                headers=_HEADERS,
             )
 
-        print(f"[LeetCode]   Profile status: {profile_resp.status_code}")
+        print(f"[LeetCode]   Profile HTTP status: {profile_resp.status_code}")
         if profile_resp.status_code != 200:
             print(f"[LeetCode] ❌ Non-200: {profile_resp.text[:300]}")
             return LeetCodeStats()
@@ -125,10 +131,10 @@ async def fetch_leetcode_stats(username: str) -> LeetCodeStats:
         payload_data = raw.get("data", {})
         matched_user = payload_data.get("matchedUser")
         if not matched_user:
-            print(f"[LeetCode]   ⚠ matchedUser is None — private/non-existent profile")
+            print(f"[LeetCode]   ⚠ matchedUser is None — private / non-existent profile")
             return LeetCodeStats()
 
-        # ── Step 2: difficulty counts ──────────────────────────────────────────
+        # ── Step 2: difficulty counts ─────────────────────────────────────────
         ac_list = (
             matched_user
             .get("submitStatsGlobal", {})
@@ -138,83 +144,74 @@ async def fetch_leetcode_stats(username: str) -> LeetCodeStats:
         for entry in ac_list:
             d = entry.get("difficulty", "").lower()
             c = entry.get("count", 0)
-            if d == "easy":    easy   = c
+            if d == "easy":     easy   = c
             elif d == "medium": medium = c
             elif d == "hard":   hard   = c
         total_solved = easy + medium + hard
         print(f"[LeetCode] ◄ Difficulty: easy={easy}  medium={medium}  hard={hard}  total={total_solved}")
 
-        # ── Step 3: all-time language stats ───────────────────────────────────
+        # ── Step 3: language stats from API ─────────────────────────────────
         raw_langs = matched_user.get("languageProblemCount") or []
-        all_time_lang_stats: dict[str, int] = {
+        api_lang_stats: dict[str, int] = {
             e["languageName"]: e["problemsSolved"]
             for e in raw_langs
             if e.get("languageName") and e.get("problemsSolved", 0) > 0
         }
-        print(f"[LeetCode] ◄ all-time languageStats={all_time_lang_stats}")
+        print(f"[LeetCode] ◄ API languageStats={api_lang_stats}")
 
-        # ── Step 4: all-time topic tags (3 tiers merged) ───────────────────────
-        all_time_topics: dict[str, int] = {}
-        for tier in ("advanced", "intermediate", "fundamental"):
-            for e in (matched_user.get("tagProblemCounts") or {}).get(tier) or []:
-                tag = e.get("tagName", "")
-                cnt = e.get("problemsSolved", 0)
-                if tag and cnt > 0:
-                    all_time_topics[tag] = all_time_topics.get(tag, 0) + cnt
-        all_time_topics = dict(
-            sorted(all_time_topics.items(), key=lambda x: x[1], reverse=True)
-        )
-        print(f"[LeetCode] ◄ all-time topicTags (top 10)={dict(list(all_time_topics.items())[:10])}")
-
-        # ── Step 5: recent accepted submissions ────────────────────────────────
+        # ── Step 4: parse recent accepted submissions ─────────────────────────
         raw_subs = payload_data.get("recentAcSubmissionList") or []
-        print(f"[LeetCode] ◄ raw recentAcSubmissions returned: {len(raw_subs)}")
+        print(f"[LeetCode] ◄ recentAcSubmissions returned: {len(raw_subs)}")
 
-        # Parse basic fields; deduplicate slugs so we fire at most 1 detail request per problem
-        parsed_subs: list[dict] = []
-        seen_slugs: set[str] = set()
+        parsed_subs:  list[dict] = []
+        seen_slugs:   set[str]   = set()
+        lang_counter: Counter    = Counter()   # always available from submission.lang
+
         for sub in raw_subs[:20]:
-            title     = sub.get("title", "")
-            titleSlug = sub.get("titleSlug", "")
-            lang      = sub.get("lang", "")
+            title      = sub.get("title", "")
+            title_slug = sub.get("titleSlug", "")
+            lang       = sub.get("lang", "")
             try:
                 ts = int(sub.get("timestamp", 0))
             except (ValueError, TypeError):
                 ts = 0
-            if title and titleSlug:
-                parsed_subs.append({"title": title, "titleSlug": titleSlug, "lang": lang, "timestamp": ts})
-                seen_slugs.add(titleSlug)
+            if title and title_slug:
+                parsed_subs.append({
+                    "title": title, "titleSlug": title_slug,
+                    "lang":  lang,  "timestamp": ts,
+                })
+                seen_slugs.add(title_slug)
+                if lang:
+                    lang_counter[lang] += 1
 
-        # ── Step 6: concurrently fetch question details for all unique slugs ───
-        print(f"[LeetCode] ► Fetching question details for {len(seen_slugs)} unique slugs ...")
-        async with httpx.AsyncClient(timeout=15) as detail_client:
+        # ── Step 5: throttled concurrent detail fetches ───────────────────────
+        print(f"[LeetCode] ► Fetching question details for {len(seen_slugs)} slugs (max 3 concurrent) ...")
+        async with httpx.AsyncClient(timeout=15, headers=_HEADERS) as detail_client:
             detail_results = await asyncio.gather(
                 *[_fetch_question_detail(detail_client, slug) for slug in seen_slugs],
                 return_exceptions=True,
             )
 
-        # Build lookup: titleSlug → (difficulty, [tags])
-        slug_detail: dict[str, tuple[str, list[str]]] = {}
+        # Build lookup: titleSlug → (difficulty, tags)
+        slug_detail:   dict[str, tuple[str, list[str]]] = {}
+        topic_counter: Counter = Counter()
+
         for result in detail_results:
             if isinstance(result, Exception):
-                print(f"[LeetCode]   ⚠ detail gather exception: {result}")
+                print(f"[LeetCode]   ⚠ gather exception: {result}")
                 continue
             slug, difficulty, tags = result
             slug_detail[slug] = (difficulty, tags)
-            print(f"[LeetCode]   detail slug={slug!r}  diff={difficulty!r}  tags={tags}")
+            topic_counter.update(tags)
 
-        # ── Step 7: build RecentSubmission objects + aggregate counters ─────────
-        lang_counter:  Counter = Counter()
-        topic_counter: Counter = Counter()
+        print(f"[LeetCode] ◄ topic_counter top 10: {dict(topic_counter.most_common(10))}")
+        print(f"[LeetCode] ◄ lang_counter: {dict(lang_counter)}")
+
+        # ── Step 6: build RecentSubmission list ───────────────────────────────
         recent_submissions: list[RecentSubmission] = []
-
         for sub in parsed_subs:
             slug = sub["titleSlug"]
             diff, tags = slug_detail.get(slug, ("", []))
-
-            lang_counter[sub["lang"]] += 1
-            topic_counter.update(tags)
-
             recent_submissions.append(
                 RecentSubmission(
                     title=sub["title"],
@@ -226,28 +223,25 @@ async def fetch_leetcode_stats(username: str) -> LeetCodeStats:
                 )
             )
 
-        # Frequency dicts sorted descending
-        recent_lang_stats  = dict(lang_counter.most_common())
-        recent_topic_tags  = dict(topic_counter.most_common())
-        most_used_language = lang_counter.most_common(1)[0][0] if lang_counter else ""
+        # ── Step 7: decide final lang / topic stats ───────────────────────────
+        # Language: prefer all-time API stats; fall back to recent-submission count
+        final_lang_stats: dict[str, int] = api_lang_stats if api_lang_stats else dict(lang_counter.most_common())
+        # Topics: per-question detail fetches (the only reliable public source)
+        final_topic_tags: dict[str, int] = dict(topic_counter.most_common())
 
-        print(f"[LeetCode] ◄ recent languageStats      = {recent_lang_stats}")
-        print(f"[LeetCode] ◄ recent topicTags (top 10) = {dict(topic_counter.most_common(10))}")
-        print(f"[LeetCode] ◄ mostUsedLanguage          = {most_used_language!r}")
-        print(f"[LeetCode] ◄ recentSubmissions built   = {len(recent_submissions)}")
+        print(f"[LeetCode] ◄ final languageStats (n={len(final_lang_stats)}): {final_lang_stats}")
+        print(f"[LeetCode] ◄ final topicTags     (n={len(final_topic_tags)}): {dict(list(final_topic_tags.items())[:10])}")
+        print(f"[LeetCode] ◄ recentSubmissions   (n={len(recent_submissions)})")
 
-        # ── Step 8: assemble deep stats ────────────────────────────────────────
-        # languageStats / topicTags use the *recent* aggregations for relevance;
-        # all-time data is available in all_time_lang_stats / all_time_topics.
         deep = LeetCodeDeepStats(
             totalSolved=total_solved,
             difficulty=LeetCodeDifficulty(easy=easy, medium=medium, hard=hard),
-            languageStats=recent_lang_stats,
-            topicTags=recent_topic_tags,
+            languageStats=final_lang_stats,
+            topicTags=final_topic_tags,
             recentSubmissions=recent_submissions,
         )
 
-        print(f"[LeetCode] ✅ Full LeetCode stats assembled")
+        print(f"[LeetCode] ✅ Stats assembled for '{username}'")
         return LeetCodeStats(easy=easy, medium=medium, hard=hard, deep=deep)
 
     except Exception as e:
