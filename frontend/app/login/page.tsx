@@ -3,27 +3,24 @@
 import { useAuthViewModel } from "@/viewmodels/authViewModel";
 import Link from "next/link";
 import { Loader2, Zap, Mail, Lock, GraduationCap, Shield } from "lucide-react";
+import AuthLayout from "@/components/ui/auth-layout";
 
 export default function LoginPage() {
   const { email, setEmail, password, setPassword, loading, error, handleLogin } = useAuthViewModel();
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[#060d18]">
-        <Loader2 className="h-10 w-10 animate-spin text-blue-400" />
-        <p className="mt-4 text-slate-400 text-sm">Signing you in…</p>
-      </div>
+      <AuthLayout>
+        <div className="flex flex-col items-center justify-center py-16">
+          <Loader2 className="h-10 w-10 animate-spin text-blue-400" />
+          <p className="mt-4 text-slate-400 text-sm">Signing you in…</p>
+        </div>
+      </AuthLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#060d18] flex items-center justify-center px-4">
-      {/* Glow */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-150 h-100 bg-blue-500/5 rounded-full blur-3xl" />
-      </div>
-
-      <div className="relative w-full max-w-md">
+    <AuthLayout>
         {/* Brand */}
         <div className="flex justify-center mb-8">
           <div className="flex items-center gap-2">
@@ -107,7 +104,6 @@ export default function LoginPage() {
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </AuthLayout>
   );
 }

@@ -7,6 +7,7 @@ import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { authService } from "@/services/authService";
 import { Loader2, Shield, Building2, User, Mail, Lock, ChevronRight, Copy, CheckCheck } from "lucide-react";
+import AuthLayout from "@/components/ui/auth-layout";
 
 export default function AdminRegisterPage() {
   const router = useRouter();
@@ -52,18 +53,19 @@ export default function AdminRegisterPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[#060d18]">
-        <Loader2 className="h-10 w-10 animate-spin text-cyan-400" />
-        <p className="mt-4 text-slate-400 text-sm">Setting up your university…</p>
-      </div>
+      <AuthLayout>
+        <div className="flex flex-col items-center justify-center py-16">
+          <Loader2 className="h-10 w-10 animate-spin text-cyan-400" />
+          <p className="mt-4 text-slate-400 text-sm">Setting up your university…</p>
+        </div>
+      </AuthLayout>
     );
   }
 
   // ── Success screen: show universityId with copy button ────────────────────
   if (createdUniversityId) {
     return (
-      <div className="min-h-screen bg-[#060d18] flex items-center justify-center px-4">
-        <div className="relative w-full max-w-md">
+      <AuthLayout>
           <div className="bg-[#0c1627] border border-cyan-500/30 rounded-2xl shadow-xl shadow-black/40 p-8 text-center space-y-6">
 
             <div className="flex justify-center">
@@ -118,18 +120,12 @@ export default function AdminRegisterPage() {
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
-        </div>
-      </div>
+    </AuthLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#060d18] flex items-center justify-center px-4">
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-150 h-100 bg-cyan-500/5 rounded-full blur-3xl" />
-      </div>
-
-      <div className="relative w-full max-w-md">
+    <AuthLayout>
         {/* Badge */}
         <div className="flex justify-center mb-8">
           <div className="flex items-center gap-2 bg-cyan-500/10 border border-cyan-500/20 rounded-full px-4 py-2">
@@ -240,7 +236,6 @@ export default function AdminRegisterPage() {
             </span>
           </div>
         </div>
-      </div>
-    </div>
+    </AuthLayout>
   );
 }

@@ -7,6 +7,7 @@ import { authService } from "@/services/authService";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { Loader2, GraduationCap, User, Mail, Lock, Hash, BookOpen, ChevronRight } from "lucide-react";
+import AuthLayout from "@/components/ui/auth-layout";
 
 export default function StudentRegisterPage() {
   const router = useRouter();
@@ -47,20 +48,17 @@ export default function StudentRegisterPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[#060d18]">
-        <Loader2 className="h-10 w-10 animate-spin text-violet-400" />
-        <p className="mt-4 text-slate-400 text-sm">Creating your account…</p>
-      </div>
+      <AuthLayout>
+        <div className="flex flex-col items-center justify-center py-16">
+          <Loader2 className="h-10 w-10 animate-spin text-violet-400" />
+          <p className="mt-4 text-slate-400 text-sm">Creating your account…</p>
+        </div>
+      </AuthLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#060d18] flex items-center justify-center px-4 py-12">
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-125 h-100 bg-violet-500/5 rounded-full blur-3xl" />
-      </div>
-
-      <div className="relative w-full max-w-md">
+    <AuthLayout>
         {/* Badge */}
         <div className="flex justify-center mb-8">
           <div className="flex items-center gap-2 bg-violet-500/10 border border-violet-500/20 rounded-full px-4 py-2">
@@ -158,7 +156,6 @@ export default function StudentRegisterPage() {
             </span>
           </div>
         </div>
-      </div>
-    </div>
+    </AuthLayout>
   );
 }
