@@ -12,6 +12,7 @@ from config.settings import settings
 from routers.auth    import router as auth_router
 from routers.admin   import router as admin_router
 from routers.student import router as student_router
+from routers.ai_chat import router as ai_chat_router
 
 app = FastAPI(
     title="Skill Intelligence API",
@@ -32,6 +33,7 @@ app.add_middleware(
 app.include_router(auth_router,    prefix="/api")   # /api/auth/*
 app.include_router(admin_router,   prefix="/api")   # /api/admin/*
 app.include_router(student_router, prefix="/api")   # /api/student/*
+app.include_router(ai_chat_router, prefix="/api")   # /api/ai/*
 
 
 @app.get("/", tags=["Health"])

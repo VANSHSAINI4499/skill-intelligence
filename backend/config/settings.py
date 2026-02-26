@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     GITHUB_TOKEN: str = ""
     LEETCODE_GRAPHQL_URL: str = "https://leetcode.com/graphql"
 
+    # ── Phase 2: AI Chat ───────────────────────────────────────────────────────
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL:   str = "gemini-1.5-flash"
+
     class Config:
         env_file = ".env"
         extra = "ignore"

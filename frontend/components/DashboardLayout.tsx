@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, LogOut, LayoutDashboard, Shield, Zap } from 'lucide-react';
+import { User, LogOut, LayoutDashboard, Shield, Zap, BrainCircuit } from 'lucide-react';
 import Link from 'next/link';
 
 interface DashboardLayoutProps {
@@ -33,6 +33,14 @@ export function DashboardLayout({ children, userRole, userName, onLogout }: Dash
           >
             <LayoutDashboard size={18} className="group-hover:text-cyan-400" />
             <span className="font-medium text-sm">Dashboard</span>
+          </Link>
+
+          <Link
+            href="/dashboard/ai-coach"
+            className="flex items-center gap-3 px-4 py-3 text-slate-400 hover:bg-slate-800/60 hover:text-cyan-400 rounded-xl transition-all duration-200 group"
+          >
+            <BrainCircuit size={18} className="group-hover:text-cyan-400" />
+            <span className="font-medium text-sm">AI Coach</span>
           </Link>
 
           {userRole === 'admin' && (
