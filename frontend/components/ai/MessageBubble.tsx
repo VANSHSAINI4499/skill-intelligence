@@ -1,8 +1,9 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Bot, User, TrendingDown, TrendingUp } from "lucide-react";
+import { User, TrendingDown, TrendingUp } from "lucide-react";
 import { ChatMessage, GapReport } from "@/models/ai";
+import { SplineScene } from "@/components/ui/splite";
 
 // ── Gap Report Card ────────────────────────────────────────────────────────────
 
@@ -110,17 +111,19 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       {/* Avatar */}
       <div
         className={`
-          shrink-0 w-8 h-8 rounded-full flex items-center justify-center mt-0.5
-          ${isUser
-            ? "bg-linear-to-br from-violet-500 to-indigo-600"
-            : "bg-linear-to-br from-cyan-500 to-blue-600"
-          }
+          shrink-0 w-8 h-8 rounded-full overflow-hidden flex items-center justify-center mt-0.5
+          ${isUser ? "bg-linear-to-br from-violet-500 to-indigo-600" : ""}
         `}
       >
-        {isUser
-          ? <User size={14} className="text-white" />
-          : <Bot size={14} className="text-white" />
-        }
+        {isUser ? (
+          <User size={14} className="text-white" />
+        ) : (
+          /* 3D bot — scaled up slightly so it fills the circle nicely */
+          <SplineScene
+            scene="https://prod.spline.design/kZDDjO5HuC9GJUM2/scene.splinecode"
+            className="w-full h-full"
+          />
+        )}
       </div>
 
       {/* Content */}

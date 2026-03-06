@@ -1,0 +1,739 @@
+================================================================================
+  SKILL INTELLIGENCE PLATFORM — BACKEND ARCHITECTURE DOCUMENTATION
+  Technology: FastAPI (Python) · Firebase Firestore · Google Gemini API
+              GitHub REST API v3 · LeetCode GraphQL API
+================================================================================
+
+
+────────────────────────────────────────────────────────────────────────────────
+1. HIGH-LEVEL ARCHITECTURE OVERVIEW
+────────────────────────────────────────────────────────────────────────────────
+
+The backend is a layered, async FastAPI application that exposes a RESTful API
+consumed exclusively by the Next.js frontend. It is designed around four layers:
+
+  Layer 1 — API Layer       (routers/)          Request routing, input validation,
+                                                 auth enforcement, response shaping.
+  Layer 2 — Service Layer   (services/)          External data fetching
+                                                 (GitHub, LeetCode).
+  Layer 3 — Processing Layer(core/)              Pure business logic —
+                                                 scoring, grading, ranking.
+  Layer 4 — AI Layer        (ai_engine/)         LLM prompt building, gap analysis,
+                                                 Gemini API integration.
+
+Each layer has a single responsibility and communicates downward only.
+No layer imports from a layer above it.
+
+Multi-Tenancy:
+  Every resource in Firestore is scoped under:
+    /universities/{universityId}/...
+  The universityId is read from the Firebase ID token's custom claims on every
+  request. This eliminates any possibility of cross-university data leakage.
+
+
+────────────────────────────────────────────────────────────────────────────────
+2. FOLDER STRUCTURE
+────────────────────────────────────────────────────────────────────────────────
+
+backend/
+├── main.py                     FastAPI app factory, CORS, router registration
+├── requirements.txt            Locked Python dependencies
+├── serviceAccountKey.json      Firebase Admin SDK service account (gitignored)
+├── .env                        Environment variables (keys, URLs, ports)
+│
+├── config/
+│   ├── settings.py             Pydantic BaseSettings — loads .env at startup
+│   └── firebase.py             Firebase Admin SDK + Firestore client init
+│
+├── routers/
+│   ├── auth.py                 /api/auth/*   — register, login token exchange
+│   ├── student.py              /api/student/* — profile, analyze, analytics
+│   ├── admin.py                /api/admin/*  — students, shortlists, config
+│   ├── ai_chat.py              /api/ai/*     — chat, batch recalculate
+│   ├── analyze.py              /api/analyze* — legacy single-call analysis
+│   ├── filter.py               /api/filter*  — legacy student filter
+│   └── debug.py                /api/debug/*  — health-check, LLM smoke-test
+│
+├── core/
+│   ├── auth_middleware.py      Firebase token verification + role dependencies
+│   └── ranking_engine.py       Scoring formula, grade logic, weight loader
+│
+├── models/
+│   ├── student_model.py        Pydantic models for student data and analysis
+│   └── admin_models.py         Pydantic models for admin operations
+│
+├── services/
+│   ├── github_service.py       GitHub REST API client
+│   ├── leetcode_service.py     LeetCode GraphQL client (async, rate-limited)
+│   └── batch_analytics_service.py  Batch aggregation and Firestore caching
+│
+└── ai_engine/
+    ├── llm_service.py          Gemini REST API wrapper with full error handling
+    └── knowledge_gap_engine.py Gap analysis logic — compares student to batch
+
+
+────────────────────────────────────────────────────────────────────────────────
+3. STARTUP AND CONFIGURATION
+────────────────────────────────────────────────────────────────────────────────
+
+3.1 Environment Variables (config/settings.py)
+    All configuration is loaded via Pydantic BaseSettings from backend/.env:
+
+    PORT                     — uvicorn listen port (default 5000)
+    APP_ENV                  — development | production
+    ALLOWED_ORIGINS          — JSON array of CORS-allowed frontend origins
+    FIREBASE_SERVICE_ACCOUNT_PATH — path to service account JSON
+    GITHUB_TOKEN             — Personal Access Token (raises limit 60→5000 req/hr)
+    LEETCODE_GRAPHQL_URL     — GraphQL endpoint (default: https://leetcode.com/graphql)
+    GEMINI_API_KEY           — Google AI Studio API key
+    GEMINI_MODEL             — Model identifier (e.g. gemini-2.0-flash)
+
+3.2 Firebase Initialisation (config/firebase.py)
+    - credentials.Certificate() loads the service account JSON at startup.
+    - firebase_admin.initialize_app() is called exactly once.
+    - A module-level db = firestore.client() is shared across all routers.
+    - Fail-fast: if the key file is missing, the process crashes at import time.
+
+3.3 LLM Fail-Fast
+    - llm_service.py validates GEMINI_API_KEY at import time.
+    - If the key is absent, a RuntimeError is raised immediately on startup.
+    - This prevents silent failures at runtime after deployment.
+
+3.4 CORS Middleware
+    - CORSMiddleware allows listed origins (from ALLOWED_ORIGINS env var).
+    - allow_credentials=True enables the frontend to send cookies/auth headers.
+    - In production, ALLOWED_ORIGINS should contain only the deployed frontend URL.
+
+
+────────────────────────────────────────────────────────────────────────────────
+4. AUTHENTICATION AND ROLE MIDDLEWARE
+────────────────────────────────────────────────────────────────────────────────
+
+4.1 Token Verification Flow
+    Every protected endpoint uses one of three FastAPI Depends() functions:
+
+    get_current_user(authorization: str = Header(...))
+      1. Checks that the header starts with "Bearer ".
+      2. Calls firebase_admin.auth.verify_id_token(token).
+      3. Extracts uid, universityId (custom claim), role (custom claim).
+      4. Returns a CurrentUser(uid, university_id, role, email) pydantic model.
+      5. Raises HTTP 401 on missing/expired/invalid token.
+      6. Raises HTTP 403 if claims are absent (user not registered through platform).
+
+    get_current_admin(user = Depends(get_current_user))
+      - Asserts user.role == "admin". Raises HTTP 403 otherwise.
+
+    get_current_student(user = Depends(get_current_user))
+      - Asserts user.role == "student". Raises HTTP 403 otherwise.
+
+4.2 Role Enforcement Summary
+    - Student hitting admin endpoint        → 403 Access denied — admin role required
+    - Admin hitting student-only endpoint   → 403 Access denied — student role required
+    - Any request without valid token       → 401 Token verification failed
+    - Any request with platform-unregistered token → 403 No platform claims
+
+4.3 Multi-Tenant Enforcement
+    - The universityId in the token determines which Firestore sub-collection is read.
+    - A student of University A cannot read data from University B because the
+      universityId is embedded in the token (server-side) — it is not a request parameter.
+
+4.4 Custom Claims Set During Registration
+    - POST /api/auth/student-register → firebase_admin.auth.set_custom_user_claims(
+          uid, { "role": "student", "universityId": university_id })
+    - POST /api/auth/admin-register  → sets role="admin" and creates the Firestore
+          university document.
+
+
+────────────────────────────────────────────────────────────────────────────────
+5. GITHUB DATA COLLECTION FLOW
+────────────────────────────────────────────────────────────────────────────────
+
+Service: services/github_service.py
+Function: fetch_github_stats(username: str) → GitHubStats
+
+Step 1 — Build Auth Headers
+    - If GITHUB_TOKEN is set: Authorization: token <PAT> (5000 req/hr limit)
+    - If not set: unauthenticated request (60 req/hr limit)
+
+Step 2 — Fetch Repository List
+    - GET https://api.github.com/users/{username}/repos?per_page=100&type=owner
+    - Timeout: 15 seconds (synchronous httpx.Client)
+    - On non-200: returns an empty GitHubStats() (graceful degradation)
+
+Step 3 — Filter and Aggregate
+    - Iterates over all returned repos.
+    - Skips forked repositories (fork=true) — only original work is counted.
+    - Accumulates:
+        totalRepos      — count of non-forked repos
+        totalStars      — sum of stargazers_count across non-forked repos
+        languageDistribution — {language: count} map
+    - Collects each repo's name, stars, url, language for ranking.
+
+Step 4 — Top Repositories
+    - Sorts owned repos by stars descending.
+    - Takes top 5 → list of TopRepository models.
+
+Step 5 — Return GitHubStats
+    {
+      totalRepos: int,
+      totalStars: int,
+      topLanguages: [{ name, count }],  — sorted by count desc
+      topRepositories: [{ name, stars, url, language }]
+    }
+
+
+────────────────────────────────────────────────────────────────────────────────
+6. LEETCODE DATA COLLECTION FLOW
+────────────────────────────────────────────────────────────────────────────────
+
+Service: services/leetcode_service.py
+Function: fetch_leetcode_stats(username: str) → LeetCodeDeepStats (async)
+
+Step 1 — Profile Query (GraphQL)
+    - POST https://leetcode.com/graphql
+    - Query: getPublicProfile — fetches:
+        submitStatsGlobal    → easy / medium / hard accepted counts
+        languageProblemCount → problems solved per programming language
+        recentAcSubmissionList (last 20) → title, titleSlug, timestamp, lang
+    - Uses browser-like headers (User-Agent, Referer, Origin) to avoid blocks.
+    - Timeout: 20 seconds.
+
+Step 2 — Parse Difficulty Counts
+    - Iterates acSubmissionNum array. Maps:
+        "Easy"   → easy count
+        "Medium" → medium count
+        "Hard"   → hard count
+        "All"    → total solved
+
+Step 3 — Fetch Question Details (Async, Rate-Limited)
+    - Collects unique titleSlugs from recentAcSubmissionList.
+    - For each slug, fires _fetch_question_detail(slug) concurrently via asyncio.gather.
+    - Semaphore: asyncio.Semaphore(3) — max 3 concurrent detail requests.
+    - Each detail query returns: difficulty, topicTags[].name.
+    - Random jitter (0.05–0.15 s) between requests prevents bursting.
+
+Step 4 — Topic Aggregation
+    - Accumulates topic tags from recent submissions.
+    - Builds topicFrequency: {topic: count} map.
+    - Maps to skill proficiency levels:
+        count >= 5       → "expert"
+        count >= 2       → "intermediate"
+        count >= 1       → "beginner"
+
+Step 5 — Return LeetCodeDeepStats
+    {
+      easy: int, medium: int, hard: int, totalSolved: int,
+      recentSubmissions: [{ title, titleSlug, timestamp, lang, difficulty, topics }],
+      topicProficiency: { "Arrays": "expert", "Dynamic Programming": "intermediate", ... },
+      languageStats: { "Python": 12, "Java": 3, ... }
+    }
+
+
+────────────────────────────────────────────────────────────────────────────────
+7. SCORING AND RANKING ENGINE
+────────────────────────────────────────────────────────────────────────────────
+
+Module: core/ranking_engine.py
+Functions: calculate_score(), calculate_grade(), load_weights()
+
+7.1 Scoring Components (Default Weights)
+    Component           Default Weight    Cap
+    ─────────────────── ──────────────    ───
+    LeetCode Hard           12 pts        20 problems
+    LeetCode Medium          8 pts        50 problems
+    LeetCode Easy            5 pts       100 problems
+    GitHub Repositories      5 pts        30 repos
+    GitHub Stars             5 pts       100 stars
+    CGPA                    10 pts        10.0
+    ─────────────────────────────────────────
+    DEFAULT MAX             45 pts
+
+7.2 Scoring Formula
+    For each component:
+      component_pts = clamp(raw_value, cap) / cap * weight
+
+    raw_score = sum of all component_pts
+    scaled_score = round((raw_score / phase1_max) * 100, 2)
+
+    Where phase1_max = sum of all configured weights.
+    This means: if an admin changes weights, the denominator adjusts automatically —
+    scores remain meaningful even when weights are tuned.
+
+7.3 Grade Assignment
+    Score Range    Grade
+    ───────────    ─────
+    >= 85          A
+    >= 70          B
+    >= 55          C
+    < 55           D
+
+7.4 Custom Weights (load_weights)
+    - Reads /universities/{universityId}/algorithm_config/current from Firestore.
+    - If the document exists and contains a "weights" object, constructs an
+      AlgorithmWeights Pydantic model from it.
+    - Falls back to compiled default weights if the document is missing or malformed.
+    - This allows admins to tune the formula through the UI without redeployment.
+
+7.5 Weight Configurability
+    Admins can adjust via PUT /api/admin/algorithm-config:
+    {
+      "weights": {
+        "leetcode_hard": 15,
+        "leetcode_medium": 10,
+        "leetcode_easy": 5,
+        "github_repos": 8,
+        "github_stars": 7,
+        "cgpa": 10
+      }
+    }
+    The new max is recalculated automatically from the sum of these values.
+
+
+────────────────────────────────────────────────────────────────────────────────
+8. STUDENT ANALYSIS PIPELINE (POST /api/student/analyze)
+────────────────────────────────────────────────────────────────────────────────
+
+This is the core pipeline endpoint. It orchestrates all subsystems in sequence:
+
+Step 1 — Authenticate
+    - Verify Bearer token → extract CurrentUser (uid, university_id, role).
+    - Enforce role=student.
+
+Step 2 — Fetch External Data (Parallel)
+    - fetch_github_stats(githubUsername)         — synchronous, runs first
+    - await fetch_leetcode_stats(leetcodeUsername) — async, runs second
+    - If either service fails, returns partial data with a warning flag.
+
+Step 3 — Load Algorithm Weights
+    - load_weights(university_id) reads custom weights from Firestore.
+    - Falls back to defaults if not configured.
+
+Step 4 — Calculate Score and Grade
+    - calculate_score(github_stats, leetcode_stats, cgpa, weights) → float (0-100)
+    - calculate_grade(score) → "A" | "B" | "C" | "D"
+
+Step 5 — Build Analytics Document
+    Constructs the AnalyticsData document containing:
+    - score, grade
+    - github: { totalRepos, totalStars, topLanguages, topRepositories }
+    - leetcode: { easy, medium, hard, totalSolved, recentSubmissions,
+                  topicProficiency, languageStats }
+    - cgpa, batch, branch, githubUsername, leetcodeUsername
+    - analyzedAt: server timestamp
+
+Step 6 — Write to Firestore
+    Writes to TWO documents (both under the university's sub-collection):
+    a) /universities/{id}/students/{uid}   — name, grade, score, usernames, cgpa, batch
+    b) /universities/{id}/analytics/{uid} — full analytics payload
+
+Step 7 — Return Response
+    Returns the complete AnalyzeStudentResponse to the frontend.
+    The frontend then updates the dashboard without a separate GET call.
+
+
+────────────────────────────────────────────────────────────────────────────────
+9. BATCH ANALYTICS SERVICE
+────────────────────────────────────────────────────────────────────────────────
+
+Service: services/batch_analytics_service.py
+Functions: recalculate_batch_analytics(), get_batch_analytics()
+
+Purpose: Aggregate all student statistics within a (university, batch) pair into
+a single cached document — avoiding repeated per-student reads on every AI call.
+
+9.1 Calculation Pipeline
+    Step 1 — Query all students for the given batch:
+             /universities/{id}/students WHERE batch == batch
+    Step 2 — Iterate each student, collecting:
+             - scores (for avgScore, minScore, maxScore)
+             - grades (for gradeDistribution map)
+             - topicProficiency (for skillAverages)
+    Step 3 — Aggregate:
+             - avgScore = mean of all student scores
+             - gradeDistribution = { A: 5, B: 12, C: 8, D: 3 }
+             - skillAverages = { "Arrays": 1.8, "DP": 1.2, ... }
+               (proficiency mapped to 1.0/2.0/3.0, averaged across students)
+             - topPerformers = top 5 students by score
+             - batchSize = total student count
+    Step 4 — Write to:
+             /universities/{id}/batchAnalytics/{batch}
+             with a lastUpdated server timestamp.
+
+9.2 Cache Strategy
+    - get_batch_analytics() reads the cached document first.
+    - If it doesn't exist, calls recalculate_batch_analytics() automatically.
+    - Manual recalculation is triggered via POST /api/ai/batch/recalculate (admin only).
+    - Analytics are recalculated automatically after each student analyze run.
+
+9.3 Why Caching is Critical
+    - The knowledge gap engine needs batch averages for every AI chat request.
+    - Without a cache, every chat message would trigger O(N) Firestore reads
+      (one per student in the batch). The cache reduces this to a single read.
+
+
+────────────────────────────────────────────────────────────────────────────────
+10. GEMINI AI INSIGHT GENERATION WORKFLOW
+────────────────────────────────────────────────────────────────────────────────
+
+Service: ai_engine/llm_service.py
+Function: async call_llm(prompt, system_prompt=None) → str
+
+10.1 API Communication
+    - Uses the Gemini v1beta REST API: POST .../models/{model}:generateContent
+    - API key is passed as a URL query parameter only (never in headers or logs).
+    - Uses httpx.AsyncClient with a 30-second timeout.
+    - Sends a three-turn conversation structure:
+        Turn 1 (user): system prompt / persona definition
+        Turn 2 (model): "Understood. I am ready to assist."
+        Turn 3 (user): the actual prompt
+
+10.2 Response Parsing
+    - Extracts text from: candidates[0].content.parts[0].text
+    - If this path fails (KeyError, IndexError): raises LLMError with a clear message.
+    - Returns stripped string to the caller.
+
+10.3 Error Handling Matrix
+    HTTP Status    LLMError Raised                         Action Required
+    ───────────    ─────────────────────────────────────   ────────────────
+    400            Bad request / wrong model name          Fix GEMINI_MODEL in .env
+    401 / 403      API key unauthorised                    Fix GEMINI_API_KEY in .env
+    404            Model not found                         Fix GEMINI_MODEL in .env
+    429            Free-tier rate limit exceeded           Wait ~60 s, retry
+    5xx            Google server-side error                Retry in a few minutes
+    Timeout        Network / latency issue                 Check connectivity
+    Empty response Safety filter triggered                 Rephrase the prompt
+
+10.4 Prompt Generation (knowledge_gap_engine.py / ai_chat.py)
+    Three mode-specific prompt builders construct structured prompts:
+
+    gap_analysis:
+      Injects studentScore, batchAvgScore, overallGap, percentileEstimate,
+      weakSkills, strongSkills, recommendationLevel. Asks for empathetic
+      gap explanation and two concrete next steps.
+
+    upgrade_plan:
+      Injects current grade, target grade (ladder: D→C→B→A), weak/strong skills,
+      priority level. Asks for a structured 4-week study plan with specific
+      weekly actions and a motivational closing line.
+
+    interview:
+      Injects grade-appropriate context. Responds as interviewer + coach —
+      evaluates answers, generates practice questions with hints, or provides
+      explanations based on the student's message type.
+
+10.5 Route Handler Error Propagation
+    In ai_chat.py, call_llm() is wrapped in try/except LLMError:
+    - 429 → HTTP 429 with structured JSON (user sees a wait message)
+    - 401/403 → HTTP 502 (configuration error, admin must fix key)
+    - 400 → HTTP 502 (model name wrong)
+    - Other → HTTP 502 (generic AI error)
+    FastAPI never receives an unhandled exception from the LLM subsystem.
+
+
+────────────────────────────────────────────────────────────────────────────────
+11. CHATBOT KNOWLEDGE GAP DETECTION LOGIC
+────────────────────────────────────────────────────────────────────────────────
+
+Engine: ai_engine/knowledge_gap_engine.py
+Function: async generate_knowledge_gap_report(university_id, student_id) → dict
+
+Called by: POST /api/ai/chat (before every LLM prompt construction)
+
+Step 1 — Fetch Student Document
+    Reads /universities/{id}/students/{student_id} from Firestore.
+    Extracts: score, grade, batch, topicProficiency (skill → proficiency level).
+
+Step 2 — Load Batch Analytics
+    Calls get_batch_analytics(university_id, student_id.batch).
+    Returns the cached batchAnalytics document: avgScore, skillAverages, batchSize.
+
+Step 3 — Calculate Overall Gap
+    overallGap = studentScore - batchAvgScore
+    Positive: student is above average. Negative: student is below average.
+
+Step 4 — Estimate Percentile
+    percentileEstimate = sigmoid-like approximation based on overallGap.
+    (A simplified heuristic; a full percentile requires O(N) comparison.)
+
+Step 5 — Identify Weak and Strong Skills
+    For each skill in the student's topicProficiency:
+      studentLevel = proficiency_to_score(student_proficiency)  → 1.0, 2.0, or 3.0
+      batchLevel   = skillAverages[skill] (batch average numeric)
+      If studentLevel < batchLevel: add to weakSkills
+      If studentLevel > batchLevel: add to strongSkills
+
+Step 6 — Derive Recommendation Level
+    overallGap >= -5:   "Low"    (student near/above batch average)
+    overallGap >= -15:  "Medium" (moderate lag behind peers)
+    overallGap  < -15:  "High"   (significant underperformance)
+
+Step 7 — Return Structured Report
+    {
+      studentId, batch, studentScore, batchAvgScore,
+      overallGap, percentileEstimate, studentGrade,
+      weakSkills, strongSkills, recommendationLevel, batchSize
+    }
+    This report is injected into the prompt builder AND returned to the frontend
+    for display in the GapReportCard component.
+
+
+────────────────────────────────────────────────────────────────────────────────
+12. DATABASE SCHEMA (FIRESTORE)
+────────────────────────────────────────────────────────────────────────────────
+
+All data is scoped within a multi-tenant university hierarchy.
+
+Root Documents / Collections
+─────────────────────────────
+
+/universities/{universityId}
+  Fields: name, adminUid, createdAt
+
+/universities/{universityId}/students/{studentId}
+  Fields:
+    uid, email, name, role="student"
+    batch, branch, cgpa
+    githubUsername, leetcodeUsername
+    grade, score
+    topicProficiency: { topicName: "beginner"|"intermediate"|"expert" }
+    createdAt, updatedAt
+
+/universities/{universityId}/analytics/{studentId}
+  Fields:
+    score, grade
+    github: { totalRepos, totalStars, topLanguages[], topRepositories[] }
+    leetcode: { easy, medium, hard, totalSolved,
+                recentSubmissions[], topicProficiency{}, languageStats{} }
+    cgpa, batch, branch, githubUsername, leetcodeUsername
+    analyzedAt
+
+/universities/{universityId}/algorithm_config/current
+  Fields:
+    weights: { leetcode_hard, leetcode_medium, leetcode_easy,
+               github_repos, github_stars, cgpa }
+    updatedAt, updatedBy
+
+/universities/{universityId}/company_requirements/{companyId}
+  Fields:
+    companyName, role, minScore, requiredGrades[], minRepos, minHardProblems
+    requiredSkills[], preferredSkills[], batchFilter
+    isActive: bool
+    createdAt, createdBy
+
+/universities/{universityId}/shortlists/{shortlistId}
+  Fields:
+    companyRequirementId, companyName, batch
+    rankedStudents: [{ uid, name, score, grade, matchScore }]
+    generatedAt, generatedBy
+
+/universities/{universityId}/batchAnalytics/{batch}
+  Fields:
+    batchSize, avgScore, minScore, maxScore
+    gradeDistribution: { A, B, C, D }
+    skillAverages: { topicName: float }
+    topPerformers: [{ uid, name, score, grade }]
+    lastUpdated
+
+Legacy (flat path, kept for backward compatibility):
+/algorithm_config/current
+
+
+────────────────────────────────────────────────────────────────────────────────
+13. API ENDPOINTS STRUCTURE
+────────────────────────────────────────────────────────────────────────────────
+
+PREFIX: /api
+
+AUTH ENDPOINTS (/api/auth/*)
+  POST   /auth/student-register    Register student, set Firebase claims, create Firestore doc
+  POST   /auth/admin-register      Register admin, create university doc, set claims
+
+STUDENT ENDPOINTS (/api/student/*) — requires role=student
+  GET    /student/profile          Get own Firestore profile
+  PUT    /student/profile          Update own profile fields (cgpa, usernames, etc.)
+  POST   /student/analyze          Run full analysis pipeline; writes results to Firestore
+  GET    /student/analytics        Get saved analytics document
+
+ADMIN ENDPOINTS (/api/admin/*) — requires role=admin
+  GET    /admin/students                       Filter/list students (grade, minRepos, minHard)
+  GET    /admin/students/{studentId}           Single student full detail
+  GET    /admin/batch-analytics/{batch}        Aggregated batch KPIs
+  GET    /admin/algorithm-config               Read current scoring weights
+  PUT    /admin/algorithm-config               Write new scoring weights
+  GET    /admin/company-requirements           List active requirements
+  POST   /admin/company-requirements           Create requirement
+  PATCH  /admin/company-requirements/{id}      Update / soft-delete requirement
+  POST   /admin/shortlists                     Generate ranked shortlist
+  GET    /admin/shortlists                     List shortlists (filter by batch/company)
+  GET    /admin/shortlists/{shortlistId}       Single shortlist detail
+
+AI ENDPOINTS (/api/ai/*) — requires role=student or admin
+  POST   /ai/chat                  Multi-mode AI chat (student only)
+  POST   /ai/batch/recalculate     Recalculate batch analytics cache (admin only)
+
+DEBUG ENDPOINTS (/api/debug/*) — unauthenticated (restrict in production)
+  GET    /debug/health-check       Validate all subsystems; lightweight Firestore reads
+  POST   /debug/test-llm           Safe LLM smoke-test; catches 429 gracefully
+
+ROOT
+  GET    /                         {"status": "ok", "message": "..."}
+
+
+────────────────────────────────────────────────────────────────────────────────
+14. HEALTH-CHECK AND DEBUG FLOW
+────────────────────────────────────────────────────────────────────────────────
+
+GET /api/debug/health-check
+    Validates every subsystem without calling Gemini or writing any data.
+
+    Subsystem               Check Performed
+    ────────────────────    ──────────────────────────────────────────────────
+    server                  Process alive — always "ok"
+    firebase                SDK init + reads algorithm_config/current + 1 university doc
+    github_service          GITHUB_TOKEN env var present; reports rate-limit tier
+    leetcode_service        LEETCODE_GRAPHQL_URL configured
+    ranking_engine          Runs calculate_score() + calculate_grade() on dummy data
+    llm_service             GEMINI_API_KEY + GEMINI_MODEL present (no API call)
+    role_middleware         All three dependency functions importable and callable
+
+    Returns HTTP 200 if all OK. HTTP 500 if any subsystem shows status="error".
+    The overall field is "ok" or "degraded".
+
+POST /api/debug/test-llm
+    Sends a minimal probe prompt to Gemini.
+    - Success:  { "llm_status": "ok", "reply_preview": "...", "backend_crashed": false }
+    - 429:      { "llm_status": "error", "reason": "429 rate limit",
+                  "external": true, "backend_crashed": false }
+    - Any exception is caught — FastAPI never crashes from this endpoint.
+    Returns HTTP 503 on any LLMError to signal upstream unavailability.
+
+
+────────────────────────────────────────────────────────────────────────────────
+15. ERROR HANDLING STRATEGY
+────────────────────────────────────────────────────────────────────────────────
+
+15.1 HTTP Error Conventions
+    401  — Token missing, expired, or invalid
+    403  — Wrong role or missing platform claims
+    404  — Firestore document not found (student not yet analysed, etc.)
+    422  — Pydantic validation failure (FastAPI automatic, JSON body)
+    429  — Gemini rate limit exceeded (propagated from LLMError)
+    500  — Internal server error (unexpected exception, logged)
+    502  — Upstream API error (GitHub / LeetCode / Gemini non-429 failure)
+    503  — Service temporarily unavailable (debug/test-llm endpoint only)
+
+15.2 Service Layer (GitHub, LeetCode)
+    - Non-200 HTTP responses: return empty model, log warning. Do NOT raise.
+    - Timeout: return empty model with graceful degradation in the pipeline.
+    - This ensures a student with a broken GitHub URL gets a score of 0 for
+      GitHub components, not a 500 error.
+
+15.3 LLM Layer
+    - All error paths in call_llm() raise LLMError(message, status_code).
+    - LLMError is never allowed to propagate unhandled. Every route handler
+      that calls call_llm() wraps it in try/except LLMError.
+    - Result: The AI chat endpoint returns a structured JSON error, never a crash.
+
+15.4 Firestore Layer
+    - All Firestore reads that may return None are explicitly checked.
+    - Missing documents raise HTTP 404 with a descriptive message.
+    - Writes use server timestamps and merge semantics where appropriate.
+
+15.5 Logging
+    - Python's standard logging module with logger = logging.getLogger(__name__).
+    - All error paths log at ERROR or WARNING level with full context.
+    - Production: configure logging to output JSON to stdout for log aggregation.
+    - Debug prints ([GitHub], [LeetCode], [RankingEngine]) are present in services
+      for developer visibility — replace with structured logging before production.
+
+
+────────────────────────────────────────────────────────────────────────────────
+16. SHORTLIST GENERATION LOGIC
+────────────────────────────────────────────────────────────────────────────────
+
+Endpoint: POST /api/admin/shortlists
+
+Step 1 — Load Requirements
+    Reads the specified CompanyRequirement document from Firestore.
+    Extracts: minScore, requiredGrades, minRepos, minHardProblems,
+              requiredSkills, preferredSkills, batchFilter.
+
+Step 2 — Query Students
+    Fetches all students for the university, filtered by batchFilter if set.
+
+Step 3 — Hard Filter
+    Eliminates students who fail any mandatory criterion:
+    - score < minScore
+    - grade not in requiredGrades
+    - GitHub repos < minRepos
+    - LeetCode hard count < minHardProblems
+
+Step 4 — Match Scoring
+    For each passing student, compute a matchScore:
+    - Base: overall score (already 0-100)
+    - Bonus: +N for each requiredSkill present at intermediate/expert level
+    - Bonus: +M for each preferredSkill present at any level
+    matchScore = (base + bonuses) normalized to 0-100
+
+Step 5 — Rank and Persist
+    - Sort candidates by matchScore descending.
+    - Take top N (configurable in the request, default 20).
+    - Build a Shortlist document with ranked student list.
+    - Write to /universities/{id}/shortlists/{uuid} with timestamp.
+
+Step 6 — Return
+    Returns the full ShortlistResponse with rankedStudents array.
+
+
+────────────────────────────────────────────────────────────────────────────────
+17. SCALABILITY AND DEPLOYMENT APPROACH
+────────────────────────────────────────────────────────────────────────────────
+
+17.1 Vertical Scaling (Current)
+    - FastAPI on uvicorn with async endpoints scales well on a single process.
+    - asyncio concurrency handles multiple simultaneous LeetCode API calls.
+    - Semaphore(3) on LeetCode detail requests prevents thundering herd.
+
+17.2 Horizontal Scaling
+    - The application is stateless: no session state, no in-memory cache.
+    - All state lives in Firestore (NoSQL, auto-replicated).
+    - Multiple uvicorn workers or separate pods can run concurrently.
+    - Use: uvicorn main:app --workers 4 --port 5000 (or gunicorn with uvicorn workers)
+
+17.3 Firestore Scaling
+    - Firestore scales to millions of documents with consistent latency.
+    - Batch analytics caching reduces read amplification from O(N) to O(1) per chat.
+    - Composite indexes should be added for common filter patterns
+      (e.g., batch + grade + score) if student count exceeds ~10,000.
+
+17.4 Gemini Rate Limit Handling
+    - Free tier: ~60 requests per minute.
+    - Current handling: immediate 429 propagation to the user.
+    - Production upgrade path:
+        a) Upgrade to pay-as-you-go Google AI Studio quota.
+        b) Add exponential backoff retry with max 2 retries in llm_service.py.
+        c) Add a Redis-backed request queue for chat endpoints.
+
+17.5 GitHub/LeetCode Rate Limits
+    - GitHub: 5000 req/hr with PAT. One analyze call uses 1 request.
+    - LeetCode: GraphQL public API, no hard rate limit documented.
+              Semaphore and jitter protect against IP-level blocks.
+
+17.6 Deployment Targets
+    - Backend: Google Cloud Run (serverless containers), Railway, or Render.
+    - Set FIREBASE_SERVICE_ACCOUNT_PATH to a mounted secret volume.
+    - Set all .env variables as platform environment secrets (never commit keys).
+    - Run: uvicorn main:app --host 0.0.0.0 --port $PORT
+
+17.7 Security Hardening Before Production
+    - Remove or password-protect /api/debug/* endpoints.
+    - Set APP_ENV=production to enable stricter error responses.
+    - Restrict ALLOWED_ORIGINS to the deployed frontend domain only.
+    - Enable Firebase App Check to prevent unauthorized API consumers.
+    - Rotate GEMINI_API_KEY and GITHUB_TOKEN periodically.
+    - Add request rate limiting (e.g., slowapi) per authenticated user.
+
+
+================================================================================
+END OF BACKEND DOCUMENTATION
+================================================================================

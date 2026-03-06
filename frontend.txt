@@ -1,0 +1,382 @@
+================================================================================
+  SKILL INTELLIGENCE PLATFORM — FRONTEND ARCHITECTURE DOCUMENTATION
+  Technology: Next.js 16 (App Router) · TypeScript · Firebase Auth · Tailwind CSS
+================================================================================
+
+
+────────────────────────────────────────────────────────────────────────────────
+1. HIGH-LEVEL ARCHITECTURE OVERVIEW
+────────────────────────────────────────────────────────────────────────────────
+
+The frontend is a server-side-capable React application built on Next.js 16 using
+the App Router paradigm. It follows a strict MVVM (Model-View-ViewModel) pattern
+where:
+
+  - Models        define data shapes and types
+  - ViewModels    manage async state, side effects, and business logic
+  - Pages/Views   render UI from ViewModel state with zero business logic
+  - Services      abstract all HTTP and Firebase API calls
+  - Context       provides global auth state across the tree
+
+The application is multi-tenant by design. Every authenticated user carries a
+Firebase ID token that embeds two custom claims: `role` (admin or student) and
+`universityId`. These claims flow into every API request header, ensuring strict
+data isolation between universities at both the frontend and backend.
+
+
+────────────────────────────────────────────────────────────────────────────────
+2. FOLDER STRUCTURE
+────────────────────────────────────────────────────────────────────────────────
+
+frontend/
+├── app/                          Next.js App Router pages (file-system routing)
+│   ├── layout.tsx                Root layout — wraps all pages in AuthProvider
+│   ├── page.tsx                  Public landing / redirect page
+│   ├── login/page.tsx            Student + Admin login
+│   ├── register/page.tsx         Student self-registration
+│   ├── register-admin/page.tsx   Admin university registration
+│   ├── dashboard/
+│   │   ├── page.tsx              Student analytics dashboard
+│   │   ├── ai-coach/page.tsx     Phase 2 AI chatbot interface
+│   │   └── settings/page.tsx     Student profile settings
+│   └── admin/
+│       ├── layout.tsx            Admin layout wrapper
+│       ├── page.tsx              Admin overview redirect
+│       ├── overview/page.tsx     University KPIs and batch stats
+│       ├── students/page.tsx     Student filter and table
+│       ├── algorithm/page.tsx    Scoring weight configuration
+│       ├── requirements/page.tsx Company requirements CRUD
+│       ├── shortlists/page.tsx   Generate and view shortlists
+│       └── reports/page.tsx      Batch analytics reports
+│
+├── components/                   Reusable UI components
+│   ├── DashboardLayout.tsx       Shared sidebar + topbar shell
+│   ├── ai/
+│   │   ├── ChatWindow.tsx        Message list + empty state + typing indicator
+│   │   ├── MessageBubble.tsx     Individual message with gap report card
+│   │   └── ModeSelector.tsx      Tab strip for gap_analysis / upgrade_plan / interview
+│   ├── dashboard/
+│   │   ├── GradeBadge.tsx        A/B/C/D grade chip
+│   │   ├── ScoreCircle.tsx       Circular animated score ring
+│   │   ├── GithubPulseCard.tsx   GitHub stats display
+│   │   ├── LeetcodeMasteryCard.tsx  LeetCode difficulty breakdown
+│   │   ├── SkillRadar.tsx        Recharts radar chart for skill levels
+│   │   └── TopRepositoriesCard.tsx  Top repo list with star counts
+│   └── ui/                       Atomic design-system primitives (shadcn/ui)
+│       ├── splite.tsx            SplineScene — lazy 3D bot wrapper
+│       ├── spotlight.tsx         Aceternity SVG spotlight effect
+│       ├── card.tsx              Base card container
+│       ├── button.tsx            Styled button variants
+│       ├── badge.tsx             Status chip
+│       └── ...                   (input, label, form, select, skeleton, table, tabs)
+│
+├── context/
+│   └── AuthContext.tsx           Global Firebase auth state + custom claims
+│
+├── hooks/
+│   ├── useAuth.ts                Role-gated auth hook with redirect logic
+│   └── useAiChat.ts              Chat state machine hook (messages, loading, errors)
+│
+├── viewmodels/
+│   ├── dashboardViewModel.ts     Student dashboard data orchestrator
+│   ├── adminViewModel.ts         Admin panel data and actions
+│   └── authViewModel.ts          Login / register flow logic
+│
+├── services/
+│   ├── apiClient.ts              Authenticated fetch wrapper (attaches Bearer token)
+│   ├── apiService.ts             Legacy unauthenticated API calls
+│   ├── adminApiService.ts        Admin-specific API surface (shortlists, requirements)
+│   ├── adminService.ts           Admin data service functions
+│   ├── authService.ts            Firebase Auth operations (signIn, signUp, signOut)
+│   ├── firebaseService.ts        Firestore direct reads (profile, analytics)
+│   └── studentService.ts         Student API surface (profile, analyze, analytics)
+│
+├── models/
+│   ├── types.ts                  Shared TypeScript interfaces (UserProfile, AnalyticsData)
+│   └── ai.ts                     AI-specific types (ChatMessage, GapReport, AiMode)
+│
+├── middleware/
+│   └── withRoleGuard.tsx         HOC for role-based page protection
+│
+├── lib/
+│   ├── firebase.ts               Firebase client SDK initialisation
+│   └── utils.ts                  Tailwind cn() merge utility
+│
+└── public/                       Static assets
+
+
+────────────────────────────────────────────────────────────────────────────────
+3. AUTHENTICATION ARCHITECTURE
+────────────────────────────────────────────────────────────────────────────────
+
+3.1 Firebase Client SDK Flow
+    - Firebase Auth manages the token lifecycle entirely on the client.
+    - On sign-in, Firebase issues a JWT ID token (1 hour expiry, auto-refreshed).
+    - The token is stored in memory by the Firebase SDK (not localStorage).
+
+3.2 Custom Claims Architecture
+    - The backend sets two custom claims via Firebase Admin SDK at registration:
+        { role: "admin" | "student", universityId: "<id>" }
+    - After registration, the frontend calls getIdToken(true) to force-refresh
+      the token so the new claims are visible immediately.
+    - Claims are read via getIdTokenResult() — never from Firestore.
+
+3.3 AuthContext
+    - A single React context (AuthContext.tsx) wraps the entire application.
+    - It listens to onAuthStateChanged() and exposes:
+        user, role, universityId, loading, refreshClaims()
+    - All child components consume auth state from this single source.
+
+3.4 useAuth Hook
+    - Every protected page calls useAuth({ required: "student" | "admin" }).
+    - If the role doesn't match, the hook redirects automatically:
+        Student visiting admin route → redirect to /dashboard
+        Admin visiting student route → redirect to /admin/overview
+        Unauthenticated → redirect to /login
+
+3.5 apiClient (Authenticated Fetch)
+    - Every backend request is made through apiClient.ts.
+    - Before each request, it calls user.getIdToken() to get the current token.
+    - The token is injected as: Authorization: Bearer <token>
+    - This ensures the backend can verify identity on every call.
+
+
+────────────────────────────────────────────────────────────────────────────────
+4. PAGE FLOW
+────────────────────────────────────────────────────────────────────────────────
+
+Step 1 — LANDING (/page.tsx)
+    - Checks auth state.
+    - If authenticated as student → redirect /dashboard
+    - If authenticated as admin  → redirect /admin/overview
+    - If unauthenticated         → redirect /login
+
+Step 2 — LOGIN (/login)
+    - authViewModel handles email/password sign-in via Firebase Auth.
+    - On success, reads custom claims from ID token.
+    - Routes to the appropriate dashboard based on role.
+    - Displays structured error messages for wrong-password, user-not-found, etc.
+
+Step 3 — REGISTRATION
+    Student (/register):
+      1. Collect name, email, password, university code, batch, branch.
+      2. POST /api/auth/student-register → backend creates user + sets claims.
+      3. Frontend calls refreshClaims() to load the new role immediately.
+      4. Redirect to /dashboard.
+
+    Admin (/register-admin):
+      1. Collect university name, admin name, email, password.
+      2. POST /api/auth/admin-register → backend creates university doc + sets claims.
+      3. Redirect to /admin/overview.
+
+Step 4 — STUDENT DASHBOARD (/dashboard)
+    1. dashboardViewModel kicks off a 5-step loading pipeline:
+       Step 0: Firebase auth resolves.
+       Step 1: GET /api/student/profile (name, batch, grade, score, usernames).
+       Step 2: GET /api/student/analytics (GitHub stats, LeetCode stats, skill levels).
+       Step 3: State applied to React.
+       Step 4: Loading dismissed, dashboard rendered.
+    2. A circular progress ring with step labels displays during load.
+    3. If profile exists but no analytics yet, shows the Analyze form.
+    4. If analytics exist, renders full dashboard with all cards.
+
+Step 5 — ANALYSIS TRIGGER
+    1. Student enters GitHub username, LeetCode username, CGPA, batch, branch.
+    2. POST /api/student/analyze triggers the full backend pipeline.
+    3. A loading state replaces the form until results arrive.
+    4. On completion, analytics cards animate in with staggered motion.
+
+Step 6 — AI COACH (/dashboard/ai-coach)
+    1. Page renders with 3D SplineScene hero in empty state.
+    2. Student picks a mode: Gap Analysis / Upgrade Plan / Interview Prep.
+    3. Student types a message and submits.
+    4. useAiChat hook calls POST /api/ai/chat with mode + message + Bearer token.
+    5. TypingIndicator with 3D bot avatar appears while waiting.
+    6. AI response renders in MessageBubble; gap_analysis mode also shows
+       a structured GapReportCard with batch statistics.
+    7. Conversation persists in local React state for the session.
+
+Step 7 — ADMIN FLOW (/admin/*)
+    Proceeds through the admin sidebar:
+    - Overview: batch KPIs, grade distributions, top performers.
+    - Students: filter table by grade, min repos, min hard problems.
+    - Algorithm: read and write scoring weights (PUT /api/admin/algorithm-config).
+    - Requirements: CRUD for company profiles.
+    - Shortlists: generate ranked shortlists against company requirements.
+    - Reports: full batch analytics breakdown.
+
+
+────────────────────────────────────────────────────────────────────────────────
+5. STATE MANAGEMENT FLOW
+────────────────────────────────────────────────────────────────────────────────
+
+The application uses React's built-in state primitives — no Redux or Zustand.
+State is scoped to the appropriate level:
+
+5.1 Global State (AuthContext)
+    - user, role, universityId, loading — shared across all pages.
+    - Updated only by Firebase's onAuthStateChanged listener.
+
+5.2 Page-Level State (ViewModels)
+    - Each major page has a dedicated ViewModel hook (useDashboardViewModel, etc.).
+    - ViewModels manage: loading steps, error strings, fetched data, form values.
+    - ViewModels are the only layer that calls service functions.
+    - Pages destructure state from the ViewModel and pass it to components as props.
+
+5.3 Component-Level State
+    - Chat input text, selected AI mode, textarea focus — all local useState.
+    - useAiChat hook manages the messages array, loading boolean, and error string.
+    - Messages are stored in local state only (not persisted to Firestore).
+
+5.4 Data Flow Direction
+    Services → ViewModels (fetch, transform) → Pages (props) → Components (render)
+    User actions → Component handlers → ViewModel actions → Service calls → State update → Re-render
+
+
+────────────────────────────────────────────────────────────────────────────────
+6. API INTEGRATION FLOW
+────────────────────────────────────────────────────────────────────────────────
+
+6.1 apiClient.ts — Authenticated Fetch Wrapper
+    - Accepts a path, method, and optional body.
+    - Calls firebase.auth.currentUser.getIdToken() before each request.
+    - Attaches Authorization: Bearer <token> header.
+    - Parses response as JSON or throws ApiError(status, message).
+    - All authenticated calls go through this function.
+
+6.2 studentService.ts
+    - getProfile()    → GET /api/student/profile
+    - getAnalytics()  → GET /api/student/analytics
+    - analyze(payload)→ POST /api/student/analyze
+
+6.3 adminApiService.ts
+    - getStudents(filters) → GET /api/admin/students?grade=A&...
+    - getAlgorithmConfig() → GET /api/admin/algorithm-config
+    - updateAlgorithmConfig(weights) → PUT /api/admin/algorithm-config
+    - createRequirement(data) → POST /api/admin/company-requirements
+    - generateShortlist(data) → POST /api/admin/shortlists
+    - getBatchAnalytics(batch) → GET /api/admin/batch-analytics/{batch}
+
+6.4 useAiChat.ts
+    - Maintains messages: ChatMessage[] in local state.
+    - sendMessage(text, mode) appends a user message immediately (optimistic),
+      calls POST /api/ai/chat, then appends the AI response on success.
+    - On error, removes the optimistic user message and sets an error string.
+    - 429 rate limit errors surface as: "AI temporarily unavailable — try again shortly."
+
+6.5 Environment Configuration
+    - NEXT_PUBLIC_BACKEND_URL defaults to http://127.0.0.1:5000/api
+    - Set in .env.local for each deployment environment.
+
+
+────────────────────────────────────────────────────────────────────────────────
+7. CHATBOT UI WORKFLOW
+────────────────────────────────────────────────────────────────────────────────
+
+7.1 Components Involved
+    - ai-coach/page.tsx      Orchestrator: input bar, mode selector, error banner
+    - ModeSelector.tsx       Three-tab strip (gap_analysis, upgrade_plan, interview)
+    - ChatWindow.tsx         Renders message list; manages empty state and typing
+    - MessageBubble.tsx      Individual bubble with avatar, content, gap report card
+    - splite.tsx (SplineScene) Interactive 3D bot rendered via Spline
+
+7.2 Empty State (no messages yet)
+    - Full-width split layout inside a dark rounded container.
+    - Left panel: title, subtitle, three prompt hint chips.
+    - Right panel: SplineScene hero (3D interactive bot).
+    - Spotlight SVG behind the scene creates a depth/glow effect.
+    - Lazy-loaded via React Suspense; shows Loader2 spinner while loading.
+
+7.3 Message Sending Flow
+    1. User types in <textarea>; Enter key (without Shift) triggers send.
+    2. setInput("") clears the field immediately (optimistic UX).
+    3. User message appended to messages[] with role="user".
+    4. POST /api/ai/chat fires with { mode, message } + Bearer token.
+    5. TypingIndicator appears (animated with framer-motion AnimatePresence).
+    6. On response: AI message appended with role="assistant".
+    7. ScrollIntoView on the bottomRef div auto-scrolls to latest message.
+
+7.4 Gap Report Card
+    - Only shown when mode === "gap_analysis" and gapReport is present.
+    - Displays: studentScore, batchAvgScore, gap delta, grade, percentile,
+      batch size, weak skills list, strong skills list, priority level.
+    - Color-coded: green for above-average, red/amber for below-average metrics.
+
+7.5 Error Handling
+    - Network errors → Banner: "Connection error — check your internet."
+    - 401/403        → Banner: "Session expired — please log in again."
+    - 429            → Banner: "AI rate limit — wait 60 s and retry."
+    - 500/502        → Banner: "Server error — check the console."
+    - Error banner has an X button (clearError) to dismiss.
+
+
+────────────────────────────────────────────────────────────────────────────────
+8. ERROR HANDLING STRATEGY
+────────────────────────────────────────────────────────────────────────────────
+
+8.1 API Errors
+    - All service functions throw ApiError(status, message) on non-2xx.
+    - ViewModels catch this and set a human-readable error string in state.
+    - Pages render colored alert banners from the error string.
+
+8.2 Auth Errors
+    - Firebase throws typed errors (auth/wrong-password, auth/user-not-found, etc.).
+    - authViewModel maps each Firebase error code to a user-friendly message.
+    - These are shown inline on the login/register forms.
+
+8.3 Loading States
+    - Every async operation has a corresponding loading boolean.
+    - UI shows spinners, skeleton cards, or a progress ring during load.
+    - Buttons are disabled while loading to prevent double-submission.
+
+8.4 Empty / Missing Data
+    - If analytics haven't been run yet, the form is shown instead of crashing.
+    - If batch analytics are absent, the AI coach degrades gracefully.
+    - Optional fields are typed as T | null and null-checked before rendering.
+
+8.5 Client-Side Validation
+    - react-hook-form + zod validates all forms before submission.
+    - Required fields, email format, CGPA range (0-10), and username patterns
+      are enforced at the form level to avoid unnecessary backend round trips.
+
+
+────────────────────────────────────────────────────────────────────────────────
+9. PRODUCTION CONSIDERATIONS
+────────────────────────────────────────────────────────────────────────────────
+
+9.1 Build Output
+    - next build produces a static-optimized output.
+    - Dynamic pages (dashboard, admin) use Server Components where possible;
+      client components are explicitly marked with "use client".
+
+9.2 Code Splitting
+    - SplineScene uses React.lazy() + Suspense — the Spline bundle (~2 MB) is
+      only downloaded when the AI Coach page is first visited.
+    - Each admin sub-page is automatically code-split by Next.js App Router.
+
+9.3 Security
+    - The Firebase ID token is never stored in localStorage or cookies.
+    - NEXT_PUBLIC_ variables are the only client-exposed env vars.
+    - The backend URL pointing to the internal API is hardened in .env.local.
+    - Role-based route guards (useAuth, withRoleGuard) prevent unauthorized access.
+
+9.4 Performance
+    - framer-motion animations use GPU-accelerated CSS transforms only.
+    - Recharts and Chart.js are import-time deferred with dynamic imports where needed.
+    - Tailwind CSS purges unused styles at build time; final CSS bundle is <50 KB.
+    - Firebase Auth token refresh is handled automatically by the SDK.
+
+9.5 Multi-Tenant Isolation
+    - universityId is embedded in every API call via the Bearer token.
+    - No student or admin can read data outside their university — enforced
+      both at the frontend (token claims) and backend (Firestore path scoping).
+
+9.6 Deployment
+    - Deploy to Vercel or any Node.js host supporting Next.js 16.
+    - Set NEXT_PUBLIC_BACKEND_URL and NEXT_PUBLIC_FIREBASE_* vars in the platform.
+    - Firebase project config is embedded as NEXT_PUBLIC_ env vars.
+
+
+================================================================================
+END OF FRONTEND DOCUMENTATION
+================================================================================
