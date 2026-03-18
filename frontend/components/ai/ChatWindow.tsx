@@ -120,7 +120,7 @@ export function ChatWindow({ messages, loading }: ChatWindowProps) {
   }, [messages]);
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5 scroll-smooth">
+    <div className="h-full overflow-y-auto px-6 py-4 space-y-5 scroll-smooth">
       {messages.length === 0 && !loading ? (
         <EmptyState />
       ) : (
