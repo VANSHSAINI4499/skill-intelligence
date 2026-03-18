@@ -1,9 +1,9 @@
 """
 LLM Service
 ===========
-Async wrapper around the Google Gemini REST API (generateContent).
+Async wrapper around the OpenAI Chat Completions API.
 
-Uses httpx.AsyncClient — no SDK import-time global state, no OpenAI dependency.
+Uses httpx.AsyncClient — no OpenAI SDK dependency, same pattern as before.
 
 Usage
 -----
@@ -14,14 +14,14 @@ Usage
 
 Requires
 --------
-    GEMINI_API_KEY  — set in .env  (never logged, never exposed to frontend)
-    GEMINI_MODEL    — defaults to "gemini-1.5-flash"
+    OPENAI_API_KEY  — set in backend/.env
+    OPENAI_MODEL    — defaults to "gpt-4o-mini"
 
 Error handling
 --------------
     * Missing API key   → RuntimeError at import time (fail fast)
     * HTTP 4xx / 5xx    → LLMError with status code and message
-    * Empty candidates  → LLMError
+    * Empty choices     → LLMError
     * Network timeouts  → LLMError wrapping httpx.TimeoutException
 """
 
@@ -35,20 +35,16 @@ from config.settings import settings
 logger = logging.getLogger(__name__)
 
 # ── Validate key at startup — fail fast, never log the value ─────────────────
-if not settings.GEMINI_API_KEY:
+if not settings.OPENAI_API_KEY:
     raise RuntimeError(
-        "GEMINI_API_KEY is not set. "
-        "Add it to your .env file: GEMINI_API_KEY=your_key_here"
+        "OPENAI_API_KEY is not set. "
+        "Add it to your .env file: OPENAI_API_KEY=sk-..."
     )
 
-# ── Gemini REST endpoint template ─────────────────────────────────────────────
-# gemini-1.5-* models are served under v1beta, not v1
-_GEMINI_URL = (
-    "https://generativelanguage.googleapis.com/v1beta/models/"
-    "{model}:generateContent?key={key}"
-)
+# ── OpenAI Chat Completions endpoint ─────────────────────────────────────────
+_OPENAI_URL = "https://api.openai.com/v1/chat/completions"
 
-# Default system persona injected as a leading user turn
+# Default system persona — same role as before, unchanged
 _DEFAULT_SYSTEM = (
     "You are SkillSight AI, an expert academic and career advisor. "
     "You analyse students' technical skills, compare them against batch peers, "
@@ -60,7 +56,7 @@ _DEFAULT_SYSTEM = (
 # ── Custom exception ──────────────────────────────────────────────────────────
 
 class LLMError(Exception):
-    """Raised when the Gemini API returns an error or an unusable response."""
+    """Raised when the OpenAI API returns an error or an unusable response."""
     def __init__(self, message: str, status_code: int | None = None):
         super().__init__(message)
         self.status_code = status_code
@@ -70,14 +66,15 @@ class LLMError(Exception):
 
 async def call_llm(prompt: str, system_prompt: str | None = None) -> str:
     """
-    Send a prompt to Gemini and return the generated text.
+    Send a prompt to OpenAI Chat Completions and return the generated text.
 
-    The system instruction (if any) is prepended as a model-role turn so it
-    works uniformly across Gemini 1.0 and 1.5 families.
+    OpenAI natively supports a 'system' role, so the system instruction is
+    passed as the first message in the messages array — cleaner than the
+    Gemini user/model turn workaround.
 
     Parameters
     ----------
-    prompt        : Main user-turn content (may include structured data).
+    prompt        : Main user-turn content (may include structured gap data).
     system_prompt : Optional override for the system persona.
 
     Returns
@@ -90,101 +87,95 @@ async def call_llm(prompt: str, system_prompt: str | None = None) -> str:
     """
     system = system_prompt or _DEFAULT_SYSTEM
 
-    # Gemini uses a flat `contents` list; we simulate system + user turns
-    # by sending two consecutive "user" parts with a "model" acknowledgement.
     payload: dict[str, Any] = {
-        "contents": [
-            {
-                "role": "user",
-                "parts": [{"text": system}],
-            },
-            {
-                "role": "model",
-                "parts": [{"text": "Understood. I am ready to assist."}],
-            },
-            {
-                "role": "user",
-                "parts": [{"text": prompt}],
-            },
+        "model": settings.OPENAI_MODEL,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user",   "content": prompt},
         ],
-        "generationConfig": {
-            "temperature":     0.4,
-            "maxOutputTokens": 1024,
-        },
+        "temperature": 0.7,
+        "max_tokens": 1024,
     }
 
-    url = _GEMINI_URL.format(
-        model=settings.GEMINI_MODEL,
-        key=settings.GEMINI_API_KEY,   # key only in URL query param, never logged
-    )
+    headers = {
+        "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+        "Content-Type":  "application/json",
+    }
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(url, json=payload)
+            resp = await client.post(_OPENAI_URL, json=payload, headers=headers)
     except httpx.TimeoutException as exc:
         raise LLMError(
-            "Gemini API request timed out after 30 s. "
+            "OpenAI API request timed out after 30 s. "
             "Check your internet connection or increase the timeout in llm_service.py."
         ) from exc
     except httpx.RequestError as exc:
         raise LLMError(
-            f"Network error contacting Gemini API: {exc}. "
-            "Ensure the server has outbound HTTPS access to generativelanguage.googleapis.com."
+            f"Network error contacting OpenAI API: {exc}. "
+            "Ensure the server has outbound HTTPS access to api.openai.com."
         ) from exc
 
     # ── HTTP error handling ────────────────────────────────────────────────────
     if resp.status_code == 400:
         raise LLMError(
-            f"Gemini API: bad request (400) — model name '{settings.GEMINI_MODEL}' may be wrong "
-            "or the request payload is malformed. Verify GEMINI_MODEL in .env.",
+            f"OpenAI API: bad request (400) — the request payload may be malformed. "
+            f"Check model name '{settings.OPENAI_MODEL}' in .env and the messages structure. "
+            f"Detail: {resp.text[:300]}",
             400,
         )
-    if resp.status_code in (401, 403):
+    if resp.status_code == 401:
         raise LLMError(
-            f"Gemini API: API key unauthorised ({resp.status_code}). "
-            "Check GEMINI_API_KEY in backend/.env and restart uvicorn.",
-            resp.status_code,
+            "OpenAI API: invalid API key (401). "
+            "Check OPENAI_API_KEY in backend/.env and restart uvicorn.",
+            401,
+        )
+    if resp.status_code == 403:
+        raise LLMError(
+            "OpenAI API: access forbidden (403). "
+            "Your API key may not have access to the requested model. "
+            f"Current model: '{settings.OPENAI_MODEL}'.",
+            403,
         )
     if resp.status_code == 404:
         raise LLMError(
-            f"Gemini API: model '{settings.GEMINI_MODEL}' not found (404). "
-            "Set GEMINI_MODEL=gemini-2.0-flash in backend/.env and restart uvicorn.",
+            f"OpenAI API: model '{settings.OPENAI_MODEL}' not found (404). "
+            "Set OPENAI_MODEL=gpt-4o-mini in backend/.env and restart uvicorn.",
             404,
         )
     if resp.status_code == 429:
         raise LLMError(
-            "Gemini API: free-tier rate limit exceeded (429). "
-            "Wait ~60 seconds before retrying. "
-            "Monitor quota at https://ai.dev/rate-limit.",
+            "OpenAI API: rate limit or quota exceeded (429). "
+            "Wait before retrying. Check your usage at https://platform.openai.com/usage.",
             429,
         )
     if resp.status_code >= 500:
         raise LLMError(
-            f"Gemini API: server-side error {resp.status_code}. "
-            "This is a Google outage — retry in a few minutes.",
+            f"OpenAI API: server-side error {resp.status_code}. "
+            "This is an OpenAI outage — retry in a few minutes.",
             resp.status_code,
         )
     if resp.status_code != 200:
         raise LLMError(
-            f"Gemini API: unexpected status {resp.status_code}. Response: {resp.text[:200]}",
+            f"OpenAI API: unexpected status {resp.status_code}. Response: {resp.text[:200]}",
             resp.status_code,
         )
 
     # ── Parse response ─────────────────────────────────────────────────────────
     try:
         data: dict[str, Any] = resp.json()
-        text: str = data["candidates"][0]["content"]["parts"][0]["text"]
+        text: str = data["choices"][0]["message"]["content"]
     except (KeyError, IndexError, ValueError) as exc:
-        logger.error("Unexpected Gemini response shape: %s", resp.text[:500])
+        logger.error("Unexpected OpenAI response shape: %s", resp.text[:500])
         raise LLMError(
-            "Gemini API returned an unrecognisable response structure. "
-            f"Expected candidates[0].content.parts[0].text — got: {resp.text[:200]}"
+            "OpenAI API returned an unrecognisable response structure. "
+            f"Expected choices[0].message.content — got: {resp.text[:200]}"
         ) from exc
 
     if not text or not text.strip():
         raise LLMError(
-            "Gemini API returned an empty response body (candidates list may be empty). "
-            "This can happen when the prompt triggers a safety filter."
+            "OpenAI API returned an empty response. "
+            "This can happen when the prompt triggers a content filter."
         )
 
     return text.strip()

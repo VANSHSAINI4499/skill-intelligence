@@ -7,6 +7,19 @@ export interface ChatRequest {
   message: string;
 }
 
+export interface TopicGap {
+  topic:      string;
+  studentPct: number;
+  targetPct:  number;
+  gap:        number;
+}
+
+export interface LanguageGapEntry {
+  studentPct: number;
+  targetPct:  number;
+  gap:        number;
+}
+
 export interface GapReport {
   studentId:            string;
   batch:                string;
@@ -15,8 +28,12 @@ export interface GapReport {
   overallGap:           number;
   percentileEstimate:   number;
   studentGrade:         string;
+  targetGrade?:         string;
   weakSkills:           string[];
   strongSkills:         string[];
+  weakTopics?:          TopicGap[];
+  strongTopics?:        TopicGap[];
+  languageGaps?:        Record<string, LanguageGapEntry>;
   recommendationLevel:  "Low" | "Medium" | "High";
   batchSize:            number;
 }

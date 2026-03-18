@@ -30,6 +30,7 @@ from models.student_model import (
     RecentSubmission,
     TopRepository,
 )
+from services.batch_analytics_service import recalculate_batch_analytics
 from services.github_service import fetch_github_stats
 from services.leetcode_service import fetch_leetcode_stats
 
@@ -309,6 +310,14 @@ async def analyze_self(
             student_update["branch"] = body.branch
 
         _student_ref(user.university_id, user.uid).set(student_update, merge=True)
+
+        # 5b. Auto-refresh batch analytics so admin panel is always current
+        try:
+            await recalculate_batch_analytics(user.university_id, body.batch)
+            print(f"[Student:Analyze] ✅ Batch analytics refreshed for batch={body.batch}")
+        except Exception as refresh_err:
+            # Non-fatal — batch cache miss is acceptable; admin can recalculate manually
+            print(f"[Student:Analyze] ⚠ Batch analytics refresh failed (non-fatal): {refresh_err}")
 
         # 6. Persist analytics doc
         analytics_doc = {

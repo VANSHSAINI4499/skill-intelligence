@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2 } from "lucide-react";
 import { ChatMessage } from "@/models/ai";
 import { MessageBubble } from "./MessageBubble";
 import { SplineScene } from "@/components/ui/splite";
@@ -13,7 +12,7 @@ interface ChatWindowProps {
   loading:  boolean;
 }
 
-// ── Typing indicator ──────────────────────────────────────────────────────────
+// ── Animated "Thinking" Indicator ────────────────────────────────────────────
 
 function TypingIndicator() {
   return (
@@ -21,24 +20,42 @@ function TypingIndicator() {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 8 }}
+      transition={{ duration: 0.2 }}
       className="flex gap-3 items-end"
     >
-      {/* Miniature 3D bot — no background, the scene provides its own visuals */}
+      {/* AI avatar */}
       <div className="w-8 h-8 rounded-full overflow-hidden shrink-0">
         <SplineScene
           scene="https://prod.spline.design/kZDDjO5HuC9GJUM2/scene.splinecode"
           className="w-full h-full"
         />
       </div>
-      <div className="rounded-2xl rounded-tl-sm bg-slate-800/70 border border-slate-700/60 px-4 py-3 flex items-center gap-2">
-        <Loader2 size={14} className="text-cyan-400 animate-spin" />
-        <span className="text-slate-400 text-sm">SkillSight AI is thinking…</span>
+
+      {/* Bouncing dot bubble */}
+      <div className="rounded-2xl rounded-tl-sm bg-slate-800/70 border border-slate-700/60 px-4 py-3 flex items-center gap-1.5">
+        {[0, 1, 2].map((i) => (
+          <motion.span
+            key={i}
+            className="block w-2 h-2 rounded-full bg-cyan-400"
+            animate={{
+              y: ["0%", "-60%", "0%"],
+              opacity: [0.5, 1, 0.5],
+            }}
+            transition={{
+              duration: 0.7,
+              repeat: Infinity,
+              ease: "easeInOut",
+              delay: i * 0.15,
+            }}
+          />
+        ))}
+        <span className="text-slate-500 text-xs ml-1">SkillSight AI is thinking…</span>
       </div>
     </motion.div>
   );
 }
 
-// ── Empty state ────────────────────────────────────────────────────────────────
+// ── Empty state ───────────────────────────────────────────────────────────────
 
 function EmptyState() {
   return (
@@ -84,15 +101,23 @@ function EmptyState() {
   );
 }
 
-// ── Chat Window ────────────────────────────────────────────────────────────────
+// ── Chat Window ───────────────────────────────────────────────────────────────
 
 export function ChatWindow({ messages, loading }: ChatWindowProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll whenever messages or loading state changes
+  // Auto-scroll whenever a message is added or loading state changes
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+  }, [messages.length, loading]);
+
+  // Determine the id of the latest AI message so only it gets the typing effect
+  const latestAiId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "ai") return messages[i].id;
+    }
+    return null;
+  }, [messages]);
 
   return (
     <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5 scroll-smooth">
@@ -101,13 +126,18 @@ export function ChatWindow({ messages, loading }: ChatWindowProps) {
       ) : (
         <>
           {messages.map((msg) => (
-            <MessageBubble key={msg.id} message={msg} />
+            <MessageBubble
+              key={msg.id}
+              message={msg}
+              isLatestAi={msg.role === "ai" && msg.id === latestAiId}
+            />
           ))}
           <AnimatePresence>
             {loading && <TypingIndicator key="typing" />}
           </AnimatePresence>
         </>
       )}
+      {/* Scroll anchor */}
       <div ref={bottomRef} />
     </div>
   );
