@@ -12,7 +12,7 @@
  */
 
 import { apiRequest } from "@/services/apiClient";
-import { AnalyticsData, UserProfile } from "@/models/types";
+import { AnalyticsData, UserProfile, GapAnalysisData } from "@/models/types";
 
 // ── Request / Response shapes ─────────────────────────────────────────────────
 
@@ -74,5 +74,10 @@ export const studentService = {
       { method: "POST", body: JSON.stringify(payload) },
       90_000,   // 90 second timeout
     );
+  },
+
+  /** GET /api/student/gap-analysis — get comparison data */
+  async getGapAnalysis(): Promise<GapAnalysisData> {
+    return apiRequest<GapAnalysisData>("/student/gap-analysis");
   },
 };

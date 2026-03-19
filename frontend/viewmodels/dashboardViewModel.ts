@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { firebaseService } from '@/services/firebaseService';
 import { studentService } from '@/services/studentService';
-import { UserProfile, AnalyticsData } from '@/models/types';
+import { UserProfile, AnalyticsData, GapAnalysisData } from '@/models/types';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -25,6 +25,7 @@ const STEP_LABEL: Record<number, string> = {
 export function useDashboardViewModel() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+  const [gapAnalysis, setGapAnalysis] = useState<GapAnalysisData | null>(null);
   // 0-4 steps; page is gated until step === 4
   const [loadingStep, setLoadingStep] = useState<number>(0);
   // Separate fatal-load error (shown on the loading screen, page stays gated)
@@ -58,6 +59,14 @@ export function useDashboardViewModel() {
     } catch {
       // analytics doc may not exist yet — not a fatal error, continue
     }
+
+    // Step 2b — gap analysis (also non-fatal)
+    let gapData: GapAnalysisData | undefined;
+    try {
+      gapData = await studentService.getGapAnalysis();
+    } catch {
+      // gap analysis doc may not exist yet (or batch not set) — not fatal
+    }
     setLoadingStep(3);
 
     // Apply state
@@ -68,6 +77,7 @@ export function useDashboardViewModel() {
     setBatch(profile.batch || '');
     setBranch(profile.branch || '');
     if (savedAnalytics) setAnalytics(savedAnalytics);
+    if (gapData) setGapAnalysis(gapData);
 
     // Only set 100 % AFTER everything is applied — page unblocks here
     setLoadingStep(4);
@@ -129,6 +139,14 @@ export function useDashboardViewModel() {
       );
       setAnalytics(result.analytics);
 
+      // Also trigger a refresh of gap analysis after a fresh run
+      try {
+        const freshGap = await studentService.getGapAnalysis();
+        setGapAnalysis(freshGap);
+      } catch {
+        // non-fatal
+      }
+
     } catch (err: unknown) {
       // Show the most useful part of the error to the user
       if (err instanceof Error) {
@@ -161,6 +179,7 @@ export function useDashboardViewModel() {
     branch, setBranch,
     updateProfile,
     handleLogout,
+    gapAnalysis,
     // convenience: percent + label for driving the loading screen
     loadingPct:   STEP_PCT[loadingStep]   ?? 5,
     loadingLabel: STEP_LABEL[loadingStep] ?? "Loading…",

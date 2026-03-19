@@ -7,6 +7,7 @@ import { ScoreCircle } from "@/components/dashboard/ScoreCircle";
 import { GithubPulseCard } from "@/components/dashboard/GithubPulseCard";
 import { LeetcodeMasteryCard } from "@/components/dashboard/LeetcodeMasteryCard";
 import { SkillRadar } from "@/components/dashboard/SkillRadar";
+import { GapAnalysisSection } from "@/components/dashboard/GapAnalysisSection";
 import { motion } from "framer-motion";
 import { Github, Code2, Cpu } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -201,6 +202,7 @@ export default function DashboardPage() {
     loadingPct,
     loadingLabel,
     handleLogout,
+    gapAnalysis,
   } = useDashboardViewModel();
 
   const router = useRouter();
@@ -288,6 +290,11 @@ export default function DashboardPage() {
             </div>
           </div>
         </DarkCard>
+
+        {/* SECTION 1.5 — GAP ANALYSIS & PERFORMANCE INTELLIGENCE */}
+        <motion.div variants={fadeUp}>
+          <GapAnalysisSection data={gapAnalysis} />
+        </motion.div>
 
         {/* SECTION 2 — GITHUB + LEETCODE + SKILL INSIGHTS */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">

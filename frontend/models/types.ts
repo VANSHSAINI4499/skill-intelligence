@@ -243,5 +243,13 @@ export interface ShortlistResult {
 }
 
 // ─── FilterStudentsParams — legacy alias ──────────────────────────────────────
-/** @deprecated Use AdminFilterParams */
-export type FilterStudentsParams = AdminFilterParams;
+export interface GapAnalysisData {
+  studentScore:      number;
+  group:             string;
+  groupAverage:      number;
+  batchAverage:      number;
+  groupGap:          number;
+  batchGap:          number;
+  groupStudentCount: number;
+  batchStudentCount: number;
+}

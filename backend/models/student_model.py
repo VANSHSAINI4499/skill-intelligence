@@ -103,3 +103,14 @@ class FilteredStudent(BaseModel):
     cgpa:             Optional[float] = None
     isActive:         Optional[bool]  = True
     role:             Optional[str]   = "student"
+
+
+class GapAnalysisResponse(BaseModel):
+    studentScore:      float
+    group:             str
+    groupAverage:      float
+    batchAverage:      float
+    groupGap:          float
+    batchGap:          float
+    groupStudentCount: int
+    batchStudentCount: int

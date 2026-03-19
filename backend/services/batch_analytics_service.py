@@ -14,11 +14,15 @@ Public API
     await recalculate_batch_analytics(university_id, batch)
     -> dict (the document written to Firestore)
 
+    compute_student_gap_analysis(student_score, student_group, batch_analytics)
+    -> dict  {studentScore, group, groupAverage, batchAverage, groupGap, batchGap, ...}
+
 Computed fields (backward-compatible additions marked with ★):
-    avgScore             — mean score across all students
-    gradeDistribution    — {A, B, C, D, F} counts
+    avgScore             — mean score across all students in the batch
+    gradeDistribution    — {A, B, C, D, F} student counts
     skillAverages        — proficiency averages from analytics.skills map
     topPerformers        — top 10% UIDs by score
+  ★ groupAverages        — per-grade average score {A: 72.5, B: 61.0, ...}
   ★ gradeWiseSkills      — per-grade topic + language distributions (0-100 scale)
 """
 
@@ -133,9 +137,13 @@ async def recalculate_batch_analytics(
         _batch_analytics_ref(university_id, batch).set(empty)
         return empty
 
-    # 2a ── Average score
+    # 2a ── Build a (uid → score) map and compute batch-wide average
+    #         We extract scores once and reuse them throughout.
     scores = [float(s.get("score") or s.get("aiScore") or 0) for s in students]
     avg_score = sum(scores) / total
+
+    # 2a-ext ── Group-wise averages (single pass, no redundant filtering)
+    group_averages = _compute_group_averages(students)
 
     # 2b ── Grade distribution
     grade_dist: dict[str, int] = {g: 0 for g in GRADE_ORDER}
@@ -215,10 +223,11 @@ async def recalculate_batch_analytics(
         "universityId":      university_id,
         "batch":             batch,
         "totalStudents":     total,
-        "avgScore":          round(avg_score, 3),
+        "avgScore":          round(avg_score, 3),       # batch-wide average
+        "groupAverages":     group_averages,            # ★ per-group averages {A:.., B:.., C:.., D:..}
         "gradeDistribution": grade_dist,
         "skillAverages":     skill_averages,
-        "gradeWiseSkills":   grade_wise_skills,   # ★ new field
+        "gradeWiseSkills":   grade_wise_skills,
         "topPerformers":     top_performers,
         "lastUpdated":       datetime.now(timezone.utc),
     }
@@ -243,3 +252,99 @@ async def get_batch_analytics(
     if not doc.exists:
         return None
     return doc.to_dict()
+
+
+# ── Group-wise helpers ─────────────────────────────────────────────────────────
+
+def _compute_group_averages(students: list[dict[str, Any]]) -> dict[str, float]:
+    """
+    Compute the average score for each grade group (A, B, C, D, F) in a
+    single pass over the student list.
+
+    Edge cases handled
+    ------------------
+    - Group with 1 student  → average equals that student's score.
+    - Group with 0 students → group key is omitted from the result.
+    - Student missing a score → treated as 0 (consistent with batch logic).
+
+    Returns
+    -------
+    dict mapping group label → rounded average score.
+    Example: {"A": 72.5, "B": 61.0, "C": 48.3, "D": 27.0}
+    """
+    group_buckets: dict[str, list[float]] = {}
+
+    for student in students:
+        group = (student.get("grade") or "F").upper()
+        score = float(student.get("score") or student.get("aiScore") or 0)
+        group_buckets.setdefault(group, []).append(score)
+
+    return {
+        group: round(sum(scores) / len(scores), 3)
+        for group, scores in group_buckets.items()
+    }
+
+
+def compute_student_gap_analysis(
+    student_score: float,
+    student_group: str,
+    batch_analytics: dict[str, Any],
+) -> dict[str, Any]:
+    """
+    Compute gap analysis for a single student using pre-computed batch analytics.
+
+    This function does NOT hit Firestore — it works entirely from the cached
+    batchAnalytics document returned by get_batch_analytics() or
+    recalculate_batch_analytics().  Call those first, then pass the result here.
+
+    Parameters
+    ----------
+    student_score   : The student's numeric score.
+    student_group   : The student's grade group label (e.g. "D").
+    batch_analytics : The batchAnalytics dict from Firestore.
+
+    Returns
+    -------
+    A structured dict suitable for a JSON API response:
+
+        {
+            "studentScore":   24,
+            "group":          "D",
+            "groupAverage":   27.0,    # average of all students in group D
+            "batchAverage":   50.0,    # average across the entire batch
+            "groupGap":        3.0,    # groupAverage - studentScore  (positive = behind)
+            "batchGap":       26.0,    # batchAverage - studentScore
+            "groupStudentCount": 1,    # how many students are in this group
+            "batchStudentCount": 120,  # total students in the batch
+        }
+
+    Gap interpretation
+    ------------------
+    - groupGap > 0 : student is BELOW their group average (needs improvement)
+    - groupGap = 0 : student is AT the group average
+    - groupGap < 0 : student is ABOVE their group average (outperforming peers)
+    """
+    group = student_group.upper()
+    batch_avg: float  = float(batch_analytics.get("avgScore") or 0)
+    group_averages: dict[str, float] = batch_analytics.get("groupAverages") or {}
+    grade_dist: dict[str, int]       = batch_analytics.get("gradeDistribution") or {}
+
+    # Retrieve the pre-computed group average; fall back to the student's own
+    # score if the group is not present (single-student edge case).
+    group_avg: float = group_averages.get(group, student_score)
+    group_student_count: int = grade_dist.get(group, 1)
+    batch_student_count: int = int(batch_analytics.get("totalStudents") or 0)
+
+    group_gap = round(student_score - group_avg, 3)
+    batch_gap = round(student_score - batch_avg, 3)
+
+    return {
+        "studentScore":       round(student_score, 3),
+        "group":              group,
+        "groupAverage":       group_avg,
+        "batchAverage":       batch_avg,
+        "groupGap":           group_gap,
+        "batchGap":           batch_gap,
+        "groupStudentCount":  group_student_count,
+        "batchStudentCount":  batch_student_count,
+    }

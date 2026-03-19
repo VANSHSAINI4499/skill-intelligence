@@ -29,8 +29,13 @@ from models.student_model import (
     LeetCodeDifficulty,
     RecentSubmission,
     TopRepository,
+    GapAnalysisResponse,
 )
-from services.batch_analytics_service import recalculate_batch_analytics
+from services.batch_analytics_service import (
+    recalculate_batch_analytics,
+    get_batch_analytics,
+    compute_student_gap_analysis,
+)
 from services.github_service import fetch_github_stats
 from services.leetcode_service import fetch_leetcode_stats
 
@@ -351,3 +356,44 @@ async def analyze_self(
         print(f"[Student:Analyze] ❌ {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GET /student/gap-analysis
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get(
+    "/gap-analysis",
+    response_model=GapAnalysisResponse,
+    summary="Get structured gap analysis vs group and batch",
+)
+async def get_gap_analysis(
+    user: CurrentUser = Depends(get_current_student),
+) -> GapAnalysisResponse:
+    """
+    Returns a unified comparison of the student's score against
+    their grade group average and the overall batch average.
+    """
+    # 1. Get student profile
+    doc = _student_ref(user.university_id, user.uid).get()
+    if not doc.exists:
+        raise HTTPException(status_code=404, detail="Student profile not found")
+    
+    data = doc.to_dict()
+    score = float(data.get("score") or 0)
+    grade = (data.get("grade") or "F").upper()
+    batch = data.get("batch")
+
+    if not batch:
+        raise HTTPException(status_code=400, detail="Student batch not set. Run analysis first.")
+
+    # 2. Get batch analytics
+    batch_analytics = await get_batch_analytics(user.university_id, batch)
+    if not batch_analytics:
+        # If no analytics exist, attempt a quick recalculation
+        batch_analytics = await recalculate_batch_analytics(user.university_id, batch)
+
+    # 3. Compute gap analysis
+    analysis = compute_student_gap_analysis(score, grade, batch_analytics)
+    
+    return GapAnalysisResponse(**analysis)
