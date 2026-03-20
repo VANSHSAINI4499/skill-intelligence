@@ -54,8 +54,8 @@ const RequirementCard = ({
 
     <div className="grid grid-cols-3 gap-3 mb-3">
       {[
-        { label: "Min CGPA", value: req.minCgpa?.toFixed(1) ?? "–" },
-        { label: "Min Hard", value: req.minHard ?? "–" },
+        { label: "Min CGPA", value: req.minCGPA?.toFixed(1) ?? "–" },
+        { label: "Min Hard", value: req.minLeetCodeHard ?? "–" },
         { label: "Min Repos", value: req.minRepos ?? "–" },
       ].map(({ label, value }) => (
         <div key={label} className="rounded-xl bg-white/3 p-2.5 text-center">
@@ -139,8 +139,8 @@ export default function RequirementsPage() {
 
             <div className="grid grid-cols-3 gap-3">
               {[
-                { label: "Min CGPA", key: "minCgpa", step: 0.5, min: 0, max: 10 },
-                { label: "Min Hard", key: "minHard", step: 1,   min: 0, max: 200 },
+                { label: "Min CGPA", key: "minCGPA", step: 0.5, min: 0, max: 10 },
+                { label: "Min Hard", key: "minLeetCodeHard", step: 1,   min: 0, max: 200 },
                 { label: "Min Repos", key: "minRepos", step: 1, min: 0, max: 200 },
               ].map(({ label, key, step, min, max }) => (
                 <div key={key} className="space-y-1.5">
@@ -251,9 +251,9 @@ export default function RequirementsPage() {
             <AnimatePresence mode="popLayout">
               {requirements.map((req) => (
                 <RequirementCard
-                  key={req.id}
+                  key={req.companyId}
                   req={req}
-                  onDelete={() => deleteRequirement(req.id)}
+                  onDelete={() => deleteRequirement(req.companyId)}
                 />
               ))}
             </AnimatePresence>

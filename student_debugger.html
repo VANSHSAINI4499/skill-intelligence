@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Student Data Debugger</title>
+    <style>
+        body { font-family: monospace; background: #0f172a; color: #e2e8f0; padding: 20px; max-width: 1000px; margin: 0 auto; }
+        .card { background: #1e293b; border: 1px solid #374151; border-radius: 8px; padding: 15px; margin: 15px 0; }
+        .error { background: #7f1d1d; border-color: #dc2626; }
+        .success { background: #14532d; border-color: #16a34a; }
+        .warning { background: #92400e; border-color: #d97706; }
+        button { background: #0369a1; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; margin: 5px; }
+        button:hover { background: #0284c7; }
+        pre { background: #374151; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 12px; }
+        table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+        th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #374151; }
+        th { background: #374151; }
+        .highlight { background: #fbbf24; color: #000; padding: 2px 4px; border-radius: 3px; }
+    </style>
+</head>
+<body>
+
+<h1>🔍 Student Data Debugger</h1>
+<p>Use this tool to debug why shortlists show zero candidates</p>
+
+<div class="card">
+    <h2>📊 Quick Checks</h2>
+    <button onclick="checkStudents()">Check Students Data</button>
+    <button onclick="checkCompanies()">Check Company Requirements</button>
+    <button onclick="testShortlistQuery()">Test Shortlist Query</button>
+    <button onclick="clearResults()">Clear Results</button>
+</div>
+
+<div id="results"></div>
+
+<script>
+let studentsData = null;
+let companiesData = null;
+
+async function checkStudents() {
+    log("📊 Checking students data...");
+
+    try {
+        const response = await fetch('/api/admin/students?activeOnly=false');
+        const data = await response.json();
+        studentsData = data;
+
+        if (!data.students || data.students.length === 0) {
+            logError("❌ NO STUDENTS FOUND in database!");
+            log("💡 SOLUTION: Create students first");
+            return;
+        }
+
+        logSuccess(`✅ Found ${data.students.length} students`);
+
+        // Check batch formats
+        const batches = [...new Set(data.students.map(s => s.batch).filter(b => b))];
+        log(`📅 Available batch formats: ${JSON.stringify(batches)}`);
+
+        // Check required fields
+        const hasBatch = data.students.filter(s => s.batch).length;
+        const hasRole = data.students.filter(s => s.role === 'student').length;
+        const hasActive = data.students.filter(s => s.isActive === true).length;
+
+        logTable([
+            ['Field', 'Students with Field', 'Total Students', 'Percentage'],
+            ['batch field', hasBatch, data.students.length, `${(hasBatch/data.students.length*100).toFixed(0)}%`],
+            ['role="student"', hasRole, data.students.length, `${(hasRole/data.students.length*100).toFixed(0)}%`],
+            ['isActive=true', hasActive, data.students.length, `${(hasActive/data.students.length*100).toFixed(0)}%`],
+        ]);
+
+        // Show sample student
+        const sampleStudent = data.students[0];
+        log("👤 Sample student data:");
+        logCode(JSON.stringify({
+            batch: sampleStudent.batch,
+            role: sampleStudent.role,
+            isActive: sampleStudent.isActive,
+            cgpa: sampleStudent.cgpa,
+            leetcodeHardCount: sampleStudent.leetcodeHardCount,
+            githubRepoCount: sampleStudent.githubRepoCount
+        }, null, 2));
+
+        if (hasRole === 0) {
+            logError("🚨 CRITICAL: No students have role='student'");
+        }
+        if (hasActive === 0) {
+            logError("🚨 CRITICAL: No students have isActive=true");
+        }
+
+    } catch (error) {
+        logError(`❌ Failed to fetch students: ${error.message}`);
+    }
+}
+
+async function checkCompanies() {
+    log("🏢 Checking company requirements...");
+
+    try {
+        const response = await fetch('/api/admin/company-requirements');
+        const data = await response.json();
+        companiesData = data;
+
+        if (!data || data.length === 0) {
+            logError("❌ NO COMPANIES FOUND!");
+            return;
+        }
+
+        logSuccess(`✅ Found ${data.length} companies`);
+
+        const google = data.find(c => c.companyName === 'GOOGLE');
+        if (google) {
+            log("🎯 GOOGLE company requirements:");
+            logCode(JSON.stringify({
+                companyId: google.companyId,
+                minCGPA: google.minCGPA,
+                minLeetCodeHard: google.minLeetCodeHard,
+                minRepos: google.minRepos,
+                requiredTopics: google.requiredTopics
+            }, null, 2));
+
+            // Check if requirements are too strict
+            if (google.minCGPA > 8.0) logWarning("⚠️ Min CGPA might be too high");
+            if (google.minLeetCodeHard > 100) logWarning("⚠️ Min LeetCode Hard might be too high");
+            if (google.minRepos > 10) logWarning("⚠️ Min Repos might be too high");
+        } else {
+            logError("❌ GOOGLE company not found!");
+        }
+
+    } catch (error) {
+        logError(`❌ Failed to fetch companies: ${error.message}`);
+    }
+}
+
+async function testShortlistQuery() {
+    log("🧪 Testing shortlist query logic...");
+
+    if (!studentsData || !companiesData) {
+        logError("❌ Run 'Check Students Data' and 'Check Company Requirements' first!");
+        return;
+    }
+
+    const google = companiesData.find(c => c.companyName === 'GOOGLE');
+    if (!google) {
+        logError("❌ GOOGLE company not found");
+        return;
+    }
+
+    const testBatch = prompt("Enter batch to test (e.g., 2023, 2023-2024):");
+    if (!testBatch) return;
+
+    log(`🔍 Testing query: batch='${testBatch}', role='student', isActive=true`);
+
+    // Simulate the exact query used in shortlist generation
+    const matchingStudents = studentsData.students.filter(student => {
+        // Step 1: Basic query filters
+        const batchMatch = student.batch === testBatch;
+        const roleMatch = student.role === 'student';
+        const activeMatch = student.isActive === true;
+
+        log(`Student ${student.name || student.uid}: batch=${batchMatch}, role=${roleMatch}, active=${activeMatch}`);
+
+        if (!batchMatch || !roleMatch || !activeMatch) return false;
+
+        // Step 2: Company requirement filters
+        const cgpa = parseFloat(student.cgpa || 0);
+        const leetcodeHard = parseInt(student.leetcodeHardCount || 0);
+        const githubRepos = parseInt(student.githubRepoCount || 0);
+
+        const cgpaPass = cgpa >= (google.minCGPA || 0);
+        const leetcodePass = leetcodeHard >= (google.minLeetCodeHard || 0);
+        const reposPass = githubRepos >= (google.minRepos || 0);
+
+        log(`  → CGPA: ${cgpa} >= ${google.minCGPA} = ${cgpaPass}`);
+        log(`  → LeetCode: ${leetcodeHard} >= ${google.minLeetCodeHard} = ${leetcodePass}`);
+        log(`  → Repos: ${githubRepos} >= ${google.minRepos} = ${reposPass}`);
+
+        return cgpaPass && leetcodePass && reposPass;
+    });
+
+    if (matchingStudents.length === 0) {
+        logError(`❌ ZERO students match criteria for batch '${testBatch}'`);
+        log("🔧 Possible fixes:");
+        log("1. Use correct batch format from available batches above");
+        log("2. Ensure students have role='student' and isActive=true");
+        log("3. Lower company requirements (CGPA, LeetCode, repos)");
+        log("4. Add more students to database");
+    } else {
+        logSuccess(`✅ Found ${matchingStudents.length} matching students!`);
+        log("🎉 Shortlist should work now with these settings");
+    }
+}
+
+function log(message) {
+    const results = document.getElementById('results');
+    results.innerHTML += `<div class="card">${message}</div>`;
+}
+
+function logSuccess(message) {
+    const results = document.getElementById('results');
+    results.innerHTML += `<div class="card success">${message}</div>`;
+}
+
+function logError(message) {
+    const results = document.getElementById('results');
+    results.innerHTML += `<div class="card error">${message}</div>`;
+}
+
+function logWarning(message) {
+    const results = document.getElementById('results');
+    results.innerHTML += `<div class="card warning">${message}</div>`;
+}
+
+function logCode(code) {
+    const results = document.getElementById('results');
+    results.innerHTML += `<div class="card"><pre>${code}</pre></div>`;
+}
+
+function logTable(data) {
+    let table = '<table>';
+    data.forEach((row, i) => {
+        const tag = i === 0 ? 'th' : 'td';
+        table += '<tr>' + row.map(cell => `<${tag}>${cell}</${tag}>`).join('') + '</tr>';
+    });
+    table += '</table>';
+
+    const results = document.getElementById('results');
+    results.innerHTML += `<div class="card">${table}</div>`;
+}
+
+function clearResults() {
+    document.getElementById('results').innerHTML = '';
+}
+
+// Auto-run checks on page load
+window.onload = function() {
+    log("🚀 Student Data Debugger loaded");
+    log("📝 Click buttons above to diagnose zero candidates issue");
+    log("🔍 This will help identify:");
+    log("  • Whether students exist in database");
+    log("  • Correct batch format to use");
+    log("  • Missing required fields on students");
+    log("  • Too strict company requirements");
+};
+</script>
+
+</body>
+</html>

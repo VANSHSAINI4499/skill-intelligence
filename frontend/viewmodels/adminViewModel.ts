@@ -210,8 +210,8 @@ export function useAlgorithmViewModel() {
 
 const EMPTY_FORM: CreateCompanyRequirementPayload = {
   companyName: "",
-  minCgpa: 6.0,
-  minHard: 5,
+  minCGPA: 6.0,                    // ← Fixed: was minCgpa
+  minLeetCodeHard: 5,              // ← Fixed: was minHard
   minRepos: 3,
   requiredTopics: [],
   preferredLanguages: [],

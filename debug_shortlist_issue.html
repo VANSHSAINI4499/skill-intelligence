@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Company Shortlist Debug Tool</title>
+    <style>
+        body { font-family: -apple-system,BlinkMacSystemFont,sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; background: #0f172a; color: #e2e8f0; }
+        .card { background: #1e293b; border: 1px solid #374151; border-radius: 12px; padding: 20px; margin: 20px 0; }
+        .error { background: #7f1d1d; border-color: #dc2626; }
+        .success { background: #14532d; border-color: #16a34a; }
+        .warning { background: #92400e; border-color: #d97706; }
+        pre { background: #374151; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 14px; }
+        button { background: #0369a1; color: white; border: none; padding: 12px 20px; border-radius: 6px; cursor: pointer; font-weight: 500; }
+        button:hover { background: #0284c7; }
+        .step { margin: 15px 0; padding: 10px 15px; background: #334155; border-radius: 6px; }
+        h1 { color: #60a5fa; }
+        h2 { color: #34d399; }
+        .highlight { background: #fbbf24; color: #000; padding: 2px 6px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+<h1>🔍 Company Shortlist Debug Tool</h1>
+
+<div class="card error">
+    <h2>❌ Current Issue</h2>
+    <p><strong>Error:</strong> <code>Company 'GOOGLE' not found</code></p>
+    <p><strong>Root Cause:</strong> Frontend sending company name instead of UUID</p>
+</div>
+
+<div class="card">
+    <h2>🚀 Quick Fix Steps</h2>
+
+    <div class="step">
+        <h3>Step 1: Check Browser Network Tab</h3>
+        <p>1. Open Chrome DevTools (F12) → Network tab</p>
+        <p>2. Go to Admin → Shortlists page</p>
+        <p>3. Look for this API call:</p>
+        <pre>GET /api/admin/company-requirements</pre>
+        <p>4. Click on it → Response tab</p>
+        <p><strong>Expected response format:</strong></p>
+        <pre>[{
+    "companyId": "abc123-4567-uuid-here",    ← Should be UUID
+    "companyName": "GOOGLE",                 ← Display name
+    "minCGPA": 7.0,
+    "minLeetCodeHard": 50,
+    ...
+}]</pre>
+    </div>
+
+    <div class="step">
+        <h3>Step 2: Try Generate Shortlist</h3>
+        <p>1. Select "GOOGLE" from dropdown</p>
+        <p>2. Enter batch year (e.g., "2023")</p>
+        <p>3. Click "Generate Shortlist"</p>
+        <p>4. In Network tab, look for:</p>
+        <pre>POST /api/admin/shortlists</pre>
+        <p>5. Click on it → Payload/Request tab</p>
+        <p><strong>Check the payload:</strong></p>
+        <pre>{
+    "companyId": "???",    ← What is this?
+    "batch": "2023",
+    "limit": 20
+}</pre>
+    </div>
+
+    <div class="step">
+        <h3>Step 3: Identify The Problem</h3>
+        <div class="card success">
+            <h4>✅ If payload shows UUID:</h4>
+            <pre>{"companyId": "abc123-4567-uuid"}</pre>
+            <p>→ Backend database issue. Company doesn't exist with that UUID.</p>
+        </div>
+
+        <div class="card error">
+            <h4>❌ If payload shows company name:</h4>
+            <pre>{"companyId": "GOOGLE"}</pre>
+            <p>→ Frontend bug. Dropdown not sending correct UUID.</p>
+        </div>
+    </div>
+</div>
+
+<div class="card warning">
+    <h2>🛠️ Likely Fixes</h2>
+
+    <h3>Fix #1: Company Wasn't Created Properly</h3>
+    <p>If the dropdown is empty or only shows "GOOGLE" but no UUID in the network call:</p>
+    <ol>
+        <li>Go to Admin panel</li>
+        <li>Create a new company requirement properly</li>
+        <li>Make sure it generates a UUID</li>
+        <li>Refresh shortlist page</li>
+    </ol>
+
+    <h3>Fix #2: Frontend State Bug</h3>
+    <p>If the network call shows company name instead of UUID:</p>
+    <pre>// Quick fix: Check for typos in frontend code
+// File: frontend/app/admin/shortlists/page.tsx
+// Line 160: value={c.id} should NOT be value={c.companyName}</pre>
+
+    <h3>Fix #3: Manual Input Bug</h3>
+    <p>Make sure you're <span class="highlight">selecting from the dropdown</span> and NOT typing "GOOGLE" manually in the company field.</p>
+</div>
+
+<div class="card">
+    <h2>📞 Quick Test</h2>
+    <p>To verify your company exists, open browser console and run:</p>
+    <pre>// Go to Network tab, find GET /admin/company-requirements
+// Copy the response and check if you see:
+[
+  {
+    "companyId": "some-uuid-here",
+    "companyName": "GOOGLE",
+    ...
+  }
+]
+
+// If empty array [] → No companies created yet
+// If has data but no GOOGLE → Company name mismatch
+// If shows GOOGLE with UUID → Frontend sending wrong data</pre>
+</div>
+
+<div class="card success">
+    <h2>✅ Expected Working Flow</h2>
+    <ol>
+        <li><strong>Company Creation:</strong> Admin creates "GOOGLE" → Gets UUID <code>abc123</code></li>
+        <li><strong>Dropdown Load:</strong> <code>GET /company-requirements</code> → Returns UUID + name</li>
+        <li><strong>User Selection:</strong> User sees "GOOGLE", selects it</li>
+        <li><strong>Form Submission:</strong> <code>POST /shortlists</code> with <code>{"companyId": "abc123"}</code></li>
+        <li><strong>Backend Lookup:</strong> Finds company with UUID <code>abc123</code> ✅</li>
+    </ol>
+</div>
+
+<div class="card">
+    <h2>🚨 Next Steps</h2>
+    <p><strong>Please do the debugging steps above and report back:</strong></p>
+    <ol>
+        <li>What does the GET /company-requirements response show?</li>
+        <li>What does the POST /shortlists payload show?</li>
+        <li>Is the dropdown populated with companies?</li>
+    </ol>
+    <p>📨 Share screenshots of the Network tab responses and I'll provide the exact fix!</p>
+</div>
+
+</body>
+</html>

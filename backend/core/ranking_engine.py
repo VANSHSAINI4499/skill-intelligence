@@ -12,6 +12,13 @@ Default scoring weights (max points per component)
   ───────────────────────────────────────────
   DEFAULT_MAX      45 pts  → scaled to 100
 
+Grading Thresholds (0-100 scale)
+────────────────────────────────────────────────────
+  Grade A:  75-100  (top quartile)
+  Grade B:  50-75   (above average)
+  Grade C:  25-50   (below average)
+  Grade D:   0-25   (needs significant improvement)
+
 Weights are overridable via AlgorithmWeights (stored in algorithm_config/current).
 """
 
@@ -91,11 +98,20 @@ def calculate_score(
 
 
 def calculate_grade(score: float) -> str:
-    if score >= 85:
+    """
+    Assign letter grade based on score.
+
+    Grade Distribution (0-100 scale):
+    - Grade A: 75-100  (top quartile)
+    - Grade B: 50-75   (above average)
+    - Grade C: 25-50   (below average)
+    - Grade D: 0-25    (needs significant improvement)
+    """
+    if score >= 75:
         grade = "A"
-    elif score >= 70:
+    elif score >= 50:
         grade = "B"
-    elif score >= 55:
+    elif score >= 25:
         grade = "C"
     else:
         grade = "D"

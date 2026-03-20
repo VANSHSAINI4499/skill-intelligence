@@ -157,7 +157,7 @@ export default function ShortlistsPage() {
             >
               <option value="">Select a company…</option>
               {companies.map((c) => (
-                <option key={c.id} value={c.id}>{c.companyName}</option>
+                <option key={c.companyId} value={c.companyId}>{c.companyName}</option>
               ))}
             </select>
           </div>
