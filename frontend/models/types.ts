@@ -1,5 +1,5 @@
 /**
- * types.ts — Shared TypeScript interfaces for the Skill Intelligence Platform
+ * types.ts — Shared TypeScript interfaces for the SkillSightAI Platform
  * ─────────────────────────────────────────────────────────────────────────────
  * Keep in sync with the FastAPI Pydantic models in backend/models/.
  */

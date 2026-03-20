@@ -27,7 +27,7 @@ export default function LoginPage() {
             <div className="w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
               <Zap className="h-4 w-4 text-blue-400" />
             </div>
-            <span className="text-white font-semibold text-lg tracking-tight">Skill Intelligence</span>
+            <span className="text-white font-semibold text-lg tracking-tight">SkillSightAI</span>
           </div>
         </div>
 

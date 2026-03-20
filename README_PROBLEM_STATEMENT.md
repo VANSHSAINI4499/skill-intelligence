@@ -1,4 +1,4 @@
-# 🎯 Problem Statement: Skill Intelligence Platform
+# 🎯 Problem Statement: SkillSightAI Platform
 
 ## What Problem Are We Solving?
 

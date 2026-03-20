@@ -71,7 +71,7 @@ export default function StudentsPage() {
   });
 
   const BRANCHES = ["CSE", "ECE", "EEE", "ME", "CE", "IT", "DS", "AI"];
-  const BATCHES  = ["2023", "2024", "2025", "2026", "2027"];
+  const BATCHES  = ["2023-2027", "2024-2028", "2025-2029", "2026-2030", "2027-2031"];  // ✅ FIXED: Proper batch formats
   const GRADES   = ["A", "B", "C", "D"];
   const LANGS    = ["python3", "cpp", "java", "javascript", "typescript", "c", "go", "rust"];
 

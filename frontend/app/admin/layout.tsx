@@ -80,7 +80,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 transition={{ duration: 0.15 }}
                 className="overflow-hidden"
               >
-                <p className="text-sm font-bold text-white tracking-tight whitespace-nowrap">SkillIntelligence</p>
+                <p className="text-sm font-bold text-white tracking-tight whitespace-nowrap">SkillSightAI</p>
                 <p className="text-xs text-slate-500 whitespace-nowrap">Admin Console</p>
               </motion.div>
             )}

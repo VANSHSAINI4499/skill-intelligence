@@ -1,4 +1,4 @@
-# 🧪 Test Cases: Skill Intelligence Platform
+# 🧪 Test Cases: SkillSightAI Platform
 
 ## 📋 Test Categories Overview
 

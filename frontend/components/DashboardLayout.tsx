@@ -20,7 +20,7 @@ export function DashboardLayout({ children, userRole, userName, onLogout }: Dash
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
               <Zap size={16} className="text-white" />
             </div>
-            <h1 className="text-base font-bold text-white tracking-tight">SkillIntelligence</h1>
+            <h1 className="text-base font-bold text-white tracking-tight">SkillSightAI</h1>
           </div>
           <p className="text-xs text-slate-500 mt-1 ml-10">AI Analytics Platform</p>
         </div>

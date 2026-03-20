@@ -1,6 +1,6 @@
 """
-Skill Intelligence Platform — FastAPI Backend
-==============================================
+SkillSightAI Platform — FastAPI Backend
+=======================================
 Run:
     uvicorn main:app --reload --port 5000
 """
@@ -16,8 +16,8 @@ from routers.ai_chat import router as ai_chat_router
 from routers.debug   import router as debug_router
 
 app = FastAPI(
-    title="Skill Intelligence API",
-    description="Multi-university Skill Intelligence SaaS — FastAPI Backend",
+    title="SkillSightAI API",
+    description="Multi-university SkillSightAI Platform — AI-powered career guidance and placement analytics",
     version="2.0.0",
 )
 
@@ -40,4 +40,4 @@ app.include_router(debug_router,   prefix="/api")   # /api/debug/*
 
 @app.get("/", tags=["Health"])
 async def root():
-    return {"status": "ok", "message": "Skill Intelligence API v2.0 is running"}
+    return {"status": "ok", "message": "SkillSightAI API v2.0 is running"}

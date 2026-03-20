@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Skill Intelligence Dashboard",
-  description: "Student performance tracking and analytics platform",
+  title: "SkillSightAI Dashboard",
+  description: "AI-powered student performance tracking and career guidance platform",
 };
 
 export default function RootLayout({

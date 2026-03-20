@@ -165,7 +165,7 @@ export default function ShortlistsPage() {
           <div className="space-y-1.5">
             <label className="text-xs text-slate-400">Batch Year</label>
             <input
-              type="text" placeholder="e.g. 2026"
+              type="text" placeholder="e.g. 2023-2027"
               value={batch} onChange={(e) => setBatch(e.target.value)}
               className="w-full rounded-xl bg-white/5 border border-white/8 text-sm text-slate-200
                          px-3 py-2.5 placeholder-slate-600 focus:outline-none focus:border-cyan-500/50"
