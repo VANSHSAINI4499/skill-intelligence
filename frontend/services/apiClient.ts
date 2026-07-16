@@ -10,9 +10,9 @@
  */
 
 import { auth } from "@/lib/firebase";
+import { API_BASE_URL } from "@/lib/apiConfig";
 
-export const BASE_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:5000/api";
+export const BASE_URL = API_BASE_URL;
 
 // ── Error type ────────────────────────────────────────────────────────────────
 
@@ -76,7 +76,7 @@ async function _doRequest<T>(
       throw new ApiError(408, `Request timed out after ${timeoutMs / 1000}s. The backend may be processing — try again in a moment.`);
     }
     // Network error (backend down, no internet, etc.)
-    throw new ApiError(0, "Cannot reach the server. Check that the backend is running on port 5000.");
+    throw new ApiError(0, "Cannot reach the server. Check that the backend is running.");
   } finally {
     if (timer) clearTimeout(timer);
   }
