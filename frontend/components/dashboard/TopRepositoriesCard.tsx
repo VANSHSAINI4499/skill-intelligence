@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, Variants } from "framer-motion";
 import { ExternalLink, Star, GitBranch, PackageOpen } from "lucide-react";
 import { TopRepository } from "@/models/types";
 
@@ -41,7 +41,7 @@ const getLangColor = (lang: string | null | undefined, idx: number): string => {
   return LANGUAGE_COLORS[lang] ?? FALLBACK_PALETTE[idx % FALLBACK_PALETTE.length];
 };
 
-const rowVariants = {
+const rowVariants: Variants = {
   hidden: { opacity: 0, y: 14 },
   show:   { opacity: 1, y: 0, transition: { type: "spring", stiffness: 260, damping: 22 } },
 };

@@ -52,7 +52,7 @@ function calculatePercentile(studentScore: number, batchAverage: number): number
   return Math.max(0, Math.min(100, Math.round(percentile)));
 }
 
-function getPercentileBadgeColor(percentile: number): string {
+function getPercentileBadgeColor(percentile: number): "emerald" | "amber" | "orange" | "rose" {
   if (percentile >= 75) return "emerald";
   if (percentile >= 50) return "amber";
   if (percentile >= 25) return "orange";

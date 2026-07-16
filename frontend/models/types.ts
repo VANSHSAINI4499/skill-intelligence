@@ -108,6 +108,10 @@ export interface AdminFilterParams {
   minCgpa?: number;
   minHard?: number;
   minRepos?: number;
+  /** Top language filter (client-side only — passed as query param, ignored by current backend) */
+  language?: string;
+  /** Topic tag filter (client-side only — passed as query param, ignored by current backend) */
+  topicTag?: string;
 }
 
 // ─── Student list (GET /admin/students) ──────────────────────────────────────
@@ -126,6 +130,9 @@ export interface FilteredStudentDetail {
   leetcodeUsername?: string;
   githubRepoCount: number;
   leetcodeHardCount: number;
+  topLanguage?: string;
+  solvedTopics?: string[];
+  langDistribution: Record<string, number>;
 }
 
 export interface FilterStudentsResponse {
@@ -253,3 +260,8 @@ export interface GapAnalysisData {
   groupStudentCount: number;
   batchStudentCount: number;
 }
+
+// ─── FilterStudentsParams — legacy alias used by apiService.ts ────────────────
+/** @deprecated Use AdminFilterParams instead */
+export type FilterStudentsParams = Pick<AdminFilterParams, "grade" | "minRepos" | "minHard">;
+
