@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "predev": "node -e \"const {execSync}=require('child_process');const kill=cmd=>{try{execSync(cmd,{stdio:'ignore'})}catch(e){}};try{const r=execSync('wmic process where \\\"name=\\'node.exe\\' and commandline like \\'%next%dev%\\'\\\" get processid /format:value',{encoding:'utf8'});(r.match(/ProcessId=(\\\\d+)/g)||[]).forEach(p=>kill('taskkill /F /PID '+p.replace('ProcessId=','')));}catch(e){};try{const r=execSync('netstat -ano -p TCP',{encoding:'utf8'});const m=r.match(/TCP[\\\\s]+[^\\\\s]+:3001[\\\\s]+[^\\\\s]+[\\\\s]+LISTENING[\\\\s]+(\\\\d+)/);if(m)kill('taskkill /F /PID '+m[1]);}catch(e){};const{spawnSync}=require('child_process');spawnSync('ping',['-n','2','127.0.0.1'],{stdio:'ignore'});const fs=require('fs');try{fs.rmSync('.nextbuild/dev',{recursive:true,force:true})}catch(e){}\"",
+    "predev": "node -e \"const {execSync}=require('child_process');const kill=cmd=>{try{execSync(cmd,{stdio:'ignore'})}catch(e){}};try{const r=execSync('wmic process where \\\"name=\\'node.exe\\' and commandline like \\'%next%dev%\\'\\\" get processid /format:value',{encoding:'utf8'});(r.match(/ProcessId=(\\\\d+)/g)||[]).forEach(p=>kill('taskkill /F /PID '+p.replace('ProcessId=','')));}catch(e){};try{const r=execSync('netstat -ano -p TCP',{encoding:'utf8'});const m=r.match(/TCP[\\\\s]+[^\\\\s]+:3001[\\\\s]+[^\\\\s]+[\\\\s]+LISTENING[\\\\s]+(\\\\d+)/);if(m)kill('taskkill /F /PID '+m[1]);}catch(e){};const{spawnSync}=require('child_process');spawnSync('ping',['-n','2','127.0.0.1'],{stdio:'ignore'});const fs=require('fs');try{fs.rmSync('.next/cache',{recursive:true,force:true})}catch(e){}\"",
     "dev": "next dev -p 3001",
     "build": "next build",
     "start": "next start",
