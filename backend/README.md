@@ -2,27 +2,23 @@
 
 This directory contains the FastAPI backend for the Skill Intelligence platform.
 
-## Vercel Deployment & Serverless Functions Note
+## Vercel Deployment Configuration (`vercel.json`)
 
-When deploying this `backend` folder as a separate project on Vercel using the Python runtime, Vercel automatically detects `main.py` (or the ASGI application entrypoint) without needing a `vercel.json` configuration file.
+When deploying this `backend` folder as a separate project on Vercel (`Root Directory = "backend"`), relying on pure auto-detection without explicit build configuration resulted in Vercel returning its 404 NOT_FOUND page on every API request.
 
-### Function Timeout / `maxDuration` Configuration
+To ensure Vercel builds `main.py` with `@vercel/python` and routes all incoming HTTP requests to our FastAPI ASGI app (`main.py`), explicit `builds` and `routes` are configured in `backend/vercel.json`:
 
-We previously attempted to configure a custom function timeout using `backend/vercel.json`:
 ```json
 {
-  "functions": {
-    "main.py": { "maxDuration": 30 }
-  }
+  "builds": [
+    { "src": "main.py", "use": "@vercel/python" }
+  ],
+  "routes": [
+    { "src": "/(.*)", "dest": "main.py" }
+  ]
 }
 ```
-However, specifying `"main.py"` caused Vercel deployments to fail with:
-> *Error: The pattern "main.py" defined in `functions` doesn't match any Serverless Functions inside the `api` directory.*
 
-**Important:** Do **not** blindly recreate `vercel.json` with guessed patterns (e.g., `api/main.py` or `*.py`). 
-
-To correctly configure `maxDuration` or other function properties in the future:
-1. First, deploy the backend to Vercel **without** `vercel.json`.
-2. Once the deployment succeeds, go to the project's **Functions** tab in the Vercel dashboard.
-3. Check the exact resolved serverless function entrypoint path that Vercel detected and created for `main.py`.
-4. Use that exact path pattern as the key inside the `functions` object in `vercel.json`.
+### Important Notes on Configuration Models
+- **Do not mix `builds`/`routes` with `functions`**: The `builds`/`routes` format (`@vercel/python` builder) and the `functions` property (`api/*.py` serverless functions model) are two distinct Vercel deployment architectures and cannot/should not be mixed in the same `vercel.json`.
+- **Requirements Declaration**: `@vercel/python` reads `backend/requirements.txt` during the build step. All dependencies (`fastapi`, `uvicorn`, `pydantic`, `pydantic-settings`, `httpx`, `firebase-admin`, `python-dotenv`) must be listed there for the serverless builder to install them into the deployment environment.
