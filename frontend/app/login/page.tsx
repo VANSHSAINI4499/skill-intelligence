@@ -32,7 +32,7 @@ export default function LoginPage() {
         </div>
 
         {/* Card */}
-        <div className="bg-[#0c1627] border border-slate-700/50 rounded-2xl shadow-xl shadow-black/40 p-8">
+        <div className="bg-[#0c1627] border border-slate-700/50 rounded-2xl shadow-xl shadow-black/40 p-6 sm:p-8">
           <h1 className="text-2xl font-bold text-white text-center mb-1">Welcome back</h1>
           <p className="text-slate-400 text-sm text-center mb-8">Sign in to your account</p>
 
@@ -84,7 +84,7 @@ export default function LoginPage() {
           {/* Register options */}
           <div className="mt-6 pt-6 border-t border-slate-700/50 space-y-3">
             <p className="text-xs text-slate-500 text-center uppercase tracking-wider">New here?</p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Link
                 href="/register"
                 className="flex flex-col items-center gap-2 bg-[#111c2d] hover:bg-[#162030] border border-violet-500/20 hover:border-violet-500/40 rounded-xl px-3 py-4 text-center transition group"

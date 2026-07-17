@@ -41,7 +41,7 @@ function GapReportCard({ report }: { report: GapReport }) {
         </p>
 
         {/* Score row */}
-        <div className="grid grid-cols-3 gap-2 text-center">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center">
           <div className="rounded-lg bg-slate-800/60 py-2 px-3">
             <p className="text-xs text-slate-500 mb-0.5">Your Score</p>
             <p className="text-lg font-bold text-white">{report.studentScore}</p>

@@ -256,7 +256,7 @@ export default function SettingsPage() {
             <motion.div
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mt-4 grid grid-cols-2 gap-2"
+              className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2"
             >
               {(["Fetching GitHub", "Fetching LeetCode", "Calculating Score", "Saving Results"] as const).map((step, i) => (
                 <motion.div

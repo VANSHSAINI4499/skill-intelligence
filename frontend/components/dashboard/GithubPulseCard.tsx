@@ -75,7 +75,7 @@ export function GithubPulseCard({
     <div className="flex flex-col gap-5">
 
       {/* ── Stat chips ───────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="bg-[#0B1120] rounded-xl p-4 border border-slate-700/50">
           <div className="flex items-center gap-2 mb-1">
             <GitFork size={14} className="text-cyan-400" />

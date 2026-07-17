@@ -66,7 +66,7 @@ export default function AdminRegisterPage() {
   if (createdUniversityId) {
     return (
       <AuthLayout>
-          <div className="bg-[#0c1627] border border-cyan-500/30 rounded-2xl shadow-xl shadow-black/40 p-8 text-center space-y-6">
+          <div className="bg-[#0c1627] border border-cyan-500/30 rounded-2xl shadow-xl shadow-black/40 p-6 sm:p-8 text-center space-y-6">
 
             <div className="flex justify-center">
               <div className="w-16 h-16 rounded-full bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
@@ -135,7 +135,7 @@ export default function AdminRegisterPage() {
         </div>
 
         {/* Card */}
-        <div className="bg-[#0c1627] border border-slate-700/50 rounded-2xl shadow-xl shadow-black/40 p-8">
+        <div className="bg-[#0c1627] border border-slate-700/50 rounded-2xl shadow-xl shadow-black/40 p-6 sm:p-8">
           <h1 className="text-2xl font-bold text-white text-center mb-1">
             Register Your University
           </h1>

@@ -16,6 +16,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Shield,
+  Menu,
+  X,
 } from "lucide-react";
 import { useAdminAuth } from "@/viewmodels/adminViewModel";
 
@@ -41,6 +43,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const { adminName, authReady, logout } = useAdminAuth();
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const activeItem = NAV_ITEMS.find((n) => pathname.startsWith(n.href));
 
@@ -56,19 +59,133 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
+  const renderNavLinks = (isCollapsed: boolean) => (
+    <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
+      {NAV_ITEMS.map(({ label, href, icon: Icon, accent }) => {
+        const ac = ACCENT_CLASSES[accent];
+        const isActive = pathname.startsWith(href);
+        return (
+          <Link key={href} href={href} onClick={() => setMobileOpen(false)}>
+            <motion.div
+              whileHover={{ x: isCollapsed ? 0 : 3 }}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer
+                ${isActive
+                  ? `${ac.bg} ${ac.text} shadow-sm ${ac.glow}`
+                  : "text-slate-500 hover:text-slate-200 hover:bg-white/5"
+                }`}
+            >
+              <div className="relative shrink-0">
+                <Icon size={18} />
+                {isActive && (
+                  <span className={`absolute -right-0.5 -top-0.5 w-1.5 h-1.5 rounded-full ${ac.dot}`} />
+                )}
+              </div>
+              <AnimatePresence initial={false}>
+                {!isCollapsed && (
+                  <motion.span
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.12 }}
+                    className="text-sm font-medium whitespace-nowrap"
+                  >
+                    {label}
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          </Link>
+        );
+      })}
+    </nav>
+  );
+
+  const renderUserSection = (isCollapsed: boolean) => (
+    <div className="px-2 py-3 border-t border-white/5 space-y-1">
+      <AnimatePresence initial={false}>
+        {!isCollapsed && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/3"
+          >
+            <div className="w-7 h-7 rounded-full bg-linear-to-br from-violet-500 to-indigo-600 flex items-center justify-center shrink-0">
+              <Shield size={12} className="text-white" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-white truncate">{adminName}</p>
+              <p className="text-[10px] text-slate-500">Admin</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <button
+        onClick={() => {
+          setMobileOpen(false);
+          logout();
+        }}
+        className="flex items-center gap-3 px-3 py-2.5 w-full rounded-xl text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all duration-200 text-sm"
+      >
+        <LogOut size={16} className="shrink-0" />
+        <AnimatePresence initial={false}>
+          {!isCollapsed && (
+            <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="font-medium whitespace-nowrap">
+              Sign Out
+            </motion.span>
+          )}
+        </AnimatePresence>
+      </button>
+    </div>
+  );
+
   return (
-    <div className="min-h-screen bg-[#060d18] text-slate-100 flex">
-      {/* ── Sidebar ─────────────────────────────────────── */}
+    <div className="min-h-screen bg-[#060d18] text-slate-100 flex flex-col md:block">
+      {/* Mobile Backdrop */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-xs md:hidden"
+          onClick={() => setMobileOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* ── Mobile Drawer (< md) ─────────────────────────────────────── */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#080f1c]/95 backdrop-blur-xl border-r border-white/5 flex flex-col transition-transform duration-300 md:hidden ${
+          mobileOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="flex items-center justify-between px-4 py-5 border-b border-white/5 min-h-18">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-linear-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/25 shrink-0">
+              <Zap size={18} className="text-white" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-white tracking-tight whitespace-nowrap">SkillSightAI</p>
+              <p className="text-xs text-slate-500 whitespace-nowrap">Admin Console</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setMobileOpen(false)}
+            className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        {renderNavLinks(false)}
+        {renderUserSection(false)}
+      </aside>
+
+      {/* ── Desktop Fixed Sidebar (>= md) ─────────────────────────────────────── */}
       <motion.aside
         animate={{ width: collapsed ? 72 : 240 }}
         transition={{ duration: 0.25, ease: "easeInOut" }}
-        className="fixed left-0 top-0 h-full z-30 flex flex-col overflow-hidden
-                   bg-[#080f1c]/95 backdrop-blur-xl border-r border-white/5"
+        className="hidden md:flex fixed left-0 top-0 h-full z-30 flex-col overflow-hidden bg-[#080f1c]/95 backdrop-blur-xl border-r border-white/5"
       >
         {/* Logo */}
         <div className="flex items-center gap-3 px-4 py-5 border-b border-white/5 min-h-18">
-          <div className="w-9 h-9 rounded-xl bg-linear-to-br from-cyan-500 to-blue-600
-                          flex items-center justify-center shadow-lg shadow-cyan-500/25 shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-linear-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/25 shrink-0">
             <Zap size={18} className="text-white" />
           </div>
           <AnimatePresence initial={false}>
@@ -87,90 +204,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </AnimatePresence>
         </div>
 
-        {/* Nav */}
-        <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
-          {NAV_ITEMS.map(({ label, href, icon: Icon, accent }) => {
-            const ac = ACCENT_CLASSES[accent];
-            const isActive = pathname.startsWith(href);
-            return (
-              <Link key={href} href={href}>
-                <motion.div
-                  whileHover={{ x: collapsed ? 0 : 3 }}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer
-                    ${isActive
-                      ? `${ac.bg} ${ac.text} shadow-sm ${ac.glow}`
-                      : "text-slate-500 hover:text-slate-200 hover:bg-white/5"
-                    }`}
-                >
-                  <div className="relative shrink-0">
-                    <Icon size={18} />
-                    {isActive && (
-                      <span className={`absolute -right-0.5 -top-0.5 w-1.5 h-1.5 rounded-full ${ac.dot}`} />
-                    )}
-                  </div>
-                  <AnimatePresence initial={false}>
-                    {!collapsed && (
-                      <motion.span
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.12 }}
-                        className="text-sm font-medium whitespace-nowrap"
-                      >
-                        {label}
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
-                </motion.div>
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* User + Logout */}
-        <div className="px-2 py-3 border-t border-white/5 space-y-1">
-          <AnimatePresence initial={false}>
-            {!collapsed && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/3"
-              >
-                <div className="w-7 h-7 rounded-full bg-linear-to-br from-violet-500 to-indigo-600
-                                flex items-center justify-center shrink-0">
-                  <Shield size={12} className="text-white" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold text-white truncate">{adminName}</p>
-                  <p className="text-[10px] text-slate-500">Admin</p>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          <button
-            onClick={logout}
-            className="flex items-center gap-3 px-3 py-2.5 w-full rounded-xl
-                       text-slate-500 hover:text-rose-400 hover:bg-rose-500/10
-                       transition-all duration-200 text-sm"
-          >
-            <LogOut size={16} className="shrink-0" />
-            <AnimatePresence initial={false}>
-              {!collapsed && (
-                <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                  className="font-medium whitespace-nowrap">Sign Out</motion.span>
-              )}
-            </AnimatePresence>
-          </button>
-        </div>
+        {renderNavLinks(collapsed)}
+        {renderUserSection(collapsed)}
 
         {/* Collapse toggle */}
         <button
           onClick={() => setCollapsed((p) => !p)}
-          className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full
-                     bg-[#0d1a30] border border-white/10 flex items-center justify-center
-                     text-slate-400 hover:text-cyan-400 hover:border-cyan-500/40
-                     transition-all duration-200 shadow-lg z-10"
+          className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-[#0d1a30] border border-white/10 flex items-center justify-center text-slate-400 hover:text-cyan-400 hover:border-cyan-500/40 transition-all duration-200 shadow-lg z-10"
         >
           {collapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
         </button>
@@ -180,36 +220,47 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <motion.main
         animate={{ marginLeft: collapsed ? 72 : 240 }}
         transition={{ duration: 0.25, ease: "easeInOut" }}
-        className="flex-1 flex flex-col min-h-screen"
+        className="flex-1 flex flex-col min-h-screen !ml-0 md:!ml-[var(--desktop-ml)]"
+        style={{
+          "--desktop-ml": collapsed ? "72px" : "240px",
+        } as React.CSSProperties}
       >
         {/* Top bar */}
-        <header className="sticky top-0 z-20 h-14 bg-[#080f1c]/80 backdrop-blur-xl
-                           border-b border-white/5 flex items-center justify-between px-6">
-          <div className="flex items-center gap-2 text-sm">
-            <span className="text-slate-500">Admin</span>
+        <header className="sticky top-0 z-20 h-14 bg-[#080f1c]/80 backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-4 sm:px-6">
+          <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm min-w-0">
+            {/* Hamburger button on mobile */}
+            <button
+              onClick={() => setMobileOpen(true)}
+              className="md:hidden p-2 rounded-lg bg-white/5 text-slate-300 hover:text-white transition shrink-0"
+              aria-label="Open menu"
+            >
+              <Menu size={18} />
+            </button>
+            <span className="text-slate-500 shrink-0">Admin</span>
             {activeItem && (
               <>
-                <span className="text-slate-700">/</span>
-                <span className={`font-semibold ${ACCENT_CLASSES[activeItem.accent].text}`}>
+                <span className="text-slate-700 shrink-0">/</span>
+                <span className={`font-semibold ${ACCENT_CLASSES[activeItem.accent].text} truncate`}>
                   {activeItem.label}
                 </span>
               </>
             )}
           </div>
-          <div className="flex items-center gap-2">
-            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold tracking-widest
-                             bg-violet-500/15 text-violet-400 border border-violet-500/20 uppercase">
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="px-2 sm:px-2.5 py-1 rounded-full text-[10px] font-bold tracking-widest bg-violet-500/15 text-violet-400 border border-violet-500/20 uppercase">
               Admin
             </span>
-            <Link href="/dashboard"
-              className="text-xs text-slate-500 hover:text-cyan-400 transition-colors px-2 py-1">
-              ← Student View
+            <Link
+              href="/dashboard"
+              className="text-xs text-slate-500 hover:text-cyan-400 transition-colors px-1 sm:px-2 py-1 shrink-0"
+            >
+              ← <span className="hidden sm:inline">Student </span>View
             </Link>
           </div>
         </header>
 
         {/* Page content */}
-        <div className="flex-1 p-6 overflow-auto">
+        <div className="flex-1 p-4 sm:p-6 overflow-auto">
           <motion.div
             key={pathname}
             initial={{ opacity: 0, y: 12 }}

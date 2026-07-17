@@ -160,7 +160,7 @@ export default function OverviewPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {KPI_CARDS.map((card, i) => (
           <motion.div key={card.label} custom={i} initial="hidden" animate="show" variants={fadeUp}>
             <div className={`rounded-2xl bg-linear-to-br ${COLOR_MAP[card.color]}

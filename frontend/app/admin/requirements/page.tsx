@@ -52,7 +52,7 @@ const RequirementCard = ({
       </button>
     </div>
 
-    <div className="grid grid-cols-3 gap-3 mb-3">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
       {[
         { label: "Min CGPA", value: req.minCGPA?.toFixed(1) ?? "–" },
         { label: "Min Hard", value: req.minLeetCodeHard ?? "–" },
@@ -137,7 +137,7 @@ export default function RequirementsPage() {
               />
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {[
                 { label: "Min CGPA", key: "minCGPA", step: 0.5, min: 0, max: 10 },
                 { label: "Min Hard", key: "minLeetCodeHard", step: 1,   min: 0, max: 200 },

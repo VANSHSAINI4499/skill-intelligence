@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { motion, type Variants } from "framer-motion";
 import { ExternalLink } from "lucide-react";
@@ -216,7 +216,7 @@ export function LeetcodeMasteryCard({
       <motion.div variants={fadeUp}>
         <SectionBlock>
           <BlockLabel>Performance Breakdown</BlockLabel>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <RingGauge pct={easyPct} colorClass="text-emerald-400" label="Easy"   sublabel={`${easy} solved`}   />
             <RingGauge pct={medPct}  colorClass="text-amber-400"   label="Medium" sublabel={`${medium} solved`} />
             <RingGauge pct={hardPct} colorClass="text-rose-400"    label="Hard"   sublabel={`${hard} solved`}   />

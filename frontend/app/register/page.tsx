@@ -68,7 +68,7 @@ export default function StudentRegisterPage() {
         </div>
 
         {/* Card */}
-        <div className="bg-[#0c1627] border border-slate-700/50 rounded-2xl shadow-xl shadow-black/40 p-8">
+        <div className="bg-[#0c1627] border border-slate-700/50 rounded-2xl shadow-xl shadow-black/40 p-6 sm:p-8">
           <h1 className="text-2xl font-bold text-white text-center mb-1">Create Student Account</h1>
           <p className="text-slate-400 text-sm text-center mb-8">
             Join your university's skill intelligence platform
@@ -112,7 +112,7 @@ export default function StudentRegisterPage() {
             </div>
 
             {/* Batch + Branch row */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">Batch</label>
                 <input type="text" placeholder="2022-2026" value={batch} onChange={(e) => setBatch(e.target.value)} required pattern="\d{4}-\d{4}"
