@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: List[str] = [
         "http://localhost:3000",
         "http://localhost:3001",
-        "https://skill_intelligence.vercel.app",
+        "https://skill-intelligence-beta.vercel.app",
     ]
     FIREBASE_SERVICE_ACCOUNT_PATH: str = "serviceAccountKey.json"
     # On Vercel (read-only FS) paste the full service-account JSON as one line here.
