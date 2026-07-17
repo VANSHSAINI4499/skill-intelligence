@@ -110,18 +110,23 @@ async def health_check() -> JSONResponse:
         report["ranking_engine"] = {"status": "error", "detail": str(exc)}
 
     # ── LLM service (env check only — NO actual API call) ────────────────────
-    api_key_ok  = bool(settings.GEMINI_API_KEY)
-    model_ok    = bool(settings.GEMINI_MODEL)
-    report["llm_service"] = {
-        "status": "config_ok" if (api_key_ok and model_ok) else "config_missing",
-        "api_key_configured": api_key_ok,
-        "model_configured":   model_ok,
-        "model_name":         settings.GEMINI_MODEL or "(not set)",
-        "note": (
-            "429 expected if free-tier quota exceeded — that is an external limit, "
-            "not a backend bug"
-        ),
-    }
+    try:
+        api_key_ok  = bool(settings.OPENAI_API_KEY)
+        model_ok    = bool(settings.OPENAI_MODEL)
+        report["llm_service"] = {
+            "status": "config_ok" if (api_key_ok and model_ok) else "config_missing",
+            "api_key_configured": api_key_ok,
+            "model_configured":   model_ok,
+            "model_name":         settings.OPENAI_MODEL or "(not set)",
+            "note": (
+                "429 expected if free-tier quota exceeded — that is an external limit, "
+                "not a backend bug"
+            ),
+        }
+    except Exception as exc:
+        logger.error("[HealthCheck] LLM check error: %s", exc)
+        report["llm_service"] = {"status": "error", "detail": str(exc)}
+
 
     # ── Role middleware ───────────────────────────────────────────────────────
     try:
@@ -201,7 +206,7 @@ async def test_llm() -> JSONResponse:
             status_code=200,
             content={
                 "llm_status":    "ok",
-                "model":         settings.GEMINI_MODEL,
+                "model":         settings.OPENAI_MODEL,
                 "reply_preview": reply[:120],
                 "external":      False,
                 "backend_crashed": False,
@@ -223,14 +228,14 @@ async def test_llm() -> JSONResponse:
                 "llm_status":      "error",
                 "reason":          "429 rate limit" if is_rate_limit else f"HTTP {status_code}",
                 "detail":          str(exc),
-                "model":           settings.GEMINI_MODEL,
+                "model":           settings.OPENAI_MODEL,
                 "external":        True,
                 "backend_crashed": False,
                 "action_required": (
                     "Wait ~60 s and retry — this is a Google AI Studio "
                     "free-tier quota limit, not a backend bug."
                 ) if is_rate_limit else (
-                    "Check GEMINI_API_KEY / GEMINI_MODEL in backend/.env "
+                    "Check OPENAI_API_KEY / OPENAI_MODEL in backend/.env "
                     "and restart uvicorn."
                 ),
             },
